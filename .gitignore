@@ -8,9 +8,6 @@ build/
 client/dist/
 server/dist/
 
-# 環境変数（DBパスワード等・手動でコピー）
-.env
-**/.env
 
 # ログ
 *.log
