@@ -1,0 +1,44 @@
+version: '3.8'
+
+services:
+  db:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_DB: chemo_app
+      POSTGRES_USER: chemo_user
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-chemo_secure_password}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./server/migrations:/docker-entrypoint-initdb.d
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U chemo_user -d chemo_app"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  server:
+    build: ./server
+    environment:
+      - DATABASE_URL=postgresql://chemo_user:${DB_PASSWORD:-chemo_secure_password}@db:5432/chemo_app
+      - JWT_SECRET=${JWT_SECRET:-dev_jwt_secret_change_in_production}
+      - EMR_VENDOR=${EMR_VENDOR:-mock}
+      - EMR_ODBC_DSN=${EMR_ODBC_DSN:-}
+      - PORT=3001
+      - NODE_ENV=production
+    ports:
+      - "3001:3001"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  client:
+    build: ./client
+    ports:
+      - "3000:80"
+    depends_on:
+      - server
+
+volumes:
+  pgdata:

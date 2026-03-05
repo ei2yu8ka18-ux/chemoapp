@@ -1,0 +1,25 @@
+# 依存パッケージ
+node_modules/
+*/node_modules/
+
+# ビルド成果物
+dist/
+build/
+client/dist/
+server/dist/
+
+# 環境変数（DBパスワード等・手動でコピー）
+.env
+**/.env
+
+# ログ
+*.log
+npm-debug.log*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# エディタ
+.vscode/
+*.swp
