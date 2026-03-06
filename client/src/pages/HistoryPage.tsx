@@ -36,7 +36,10 @@ interface InterventionRecord {
 const cellSx = { border: '1px solid #ddd', py: 0.4, px: 0.75, fontSize: '0.78rem' };
 
 function formatDate(iso: string): string {
-  return iso ? iso.split('T')[0] : '';
+  if (!iso) return '';
+  // Handle both "2026-03-06" and "2026-03-06T00:00:00.000Z" formats
+  const s = String(iso).split('T')[0];
+  return s || '';
 }
 function formatDateTime(iso: string): string {
   if (!iso) return '';
@@ -190,7 +193,7 @@ export default function HistoryPage() {
             <Table size="small" sx={{ borderCollapse: 'collapse', minWidth: 1200 }}>
               <TableHead>
                 <TableRow sx={{ bgcolor: '#1a5276' }}>
-                  {['実施日','記録日時','患者番号','患者氏名','診療科/医師','レジメン','薬剤種別','介入種別','前/後','介入分類','介入詳細','介入内容','算定','結果','薬剤師'].map(h => (
+                  {['実施日','記録日時','患者番号','患者氏名','診療科/医師','レジメン','介入種別','前/後','介入分類','介入詳細','介入内容','算定','薬剤師'].map(h => (
                     <TableCell key={h} sx={{ ...cellSx, color: '#fff', fontWeight: 'bold', whiteSpace: 'nowrap' }}>
                       {h}
                     </TableCell>
@@ -200,7 +203,7 @@ export default function HistoryPage() {
               <TableBody>
                 {filtered.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={15} sx={{ textAlign: 'center', py: 4, color: '#888' }}>
+                    <TableCell colSpan={13} sx={{ textAlign: 'center', py: 4, color: '#888' }}>
                       データがありません
                     </TableCell>
                   </TableRow>
@@ -216,12 +219,6 @@ export default function HistoryPage() {
                         <Typography sx={{ fontSize: '0.72rem' }}>{r.doctor}</Typography>
                       </TableCell>
                       <TableCell sx={{ ...cellSx, fontSize: '0.75rem', maxWidth: 120 }}>{r.regimen_name}</TableCell>
-                      <TableCell sx={cellSx}>
-                        {r.drug_route && (
-                          <Chip label={r.drug_route} size="small" sx={{ fontSize: '0.65rem', height: 18,
-                            bgcolor: r.drug_route === '注射' ? '#e3f2fd' : '#f3e5f5' }} />
-                        )}
-                      </TableCell>
                       <TableCell sx={cellSx}>
                         <Chip label={r.intervention_type} size="small" sx={{
                           fontSize: '0.65rem', height: 18,
@@ -241,7 +238,6 @@ export default function HistoryPage() {
                           {r.case_candidate && <Chip label="症例候補" size="small" sx={{ fontSize: '0.6rem', height: 16, bgcolor: '#f3e5f5' }} />}
                         </Box>
                       </TableCell>
-                      <TableCell sx={{ ...cellSx, fontSize: '0.72rem' }}>{r.result || ''}</TableCell>
                       <TableCell sx={cellSx}>{r.pharmacist_name}</TableCell>
                     </TableRow>
                   ))

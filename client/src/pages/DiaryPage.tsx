@@ -278,7 +278,7 @@ export default function DiaryPage() {
             <Table size="small" sx={{ borderCollapse: 'collapse' }}>
               <TableHead>
                 <TableRow>
-                  <TH>氏名</TH><TH>開始</TH><TH>終了</TH><TH>昼</TH><TH w={52}>昼休(分)</TH><TH>実働</TH>
+                  <TH>氏名</TH><TH w={58}>開始</TH><TH w={58}>終了</TH><TH>昼</TH><TH w={44}>昼休(分)</TH><TH>実働</TH>
                   <TableCell className="no-print" sx={{ p: 0, border: 0, width: 28 }} />
                 </TableRow>
               </TableHead>
@@ -300,13 +300,13 @@ export default function DiaryPage() {
                       <TD>
                         <TextField type="time" size="small" value={ph.start_time}
                           onChange={e => setPh(i, 'start_time', e.target.value)}
-                          inputProps={{ style: { fontSize: '0.78rem', padding: '1px 4px', width: 76 } }}
+                          inputProps={{ style: { fontSize: '0.75rem', padding: '1px 2px', width: 60 } }}
                           sx={{ '& .MuiOutlinedInput-root': { height: 24 } }} />
                       </TD>
                       <TD>
                         <TextField type="time" size="small" value={ph.end_time}
                           onChange={e => setPh(i, 'end_time', e.target.value)}
-                          inputProps={{ style: { fontSize: '0.78rem', padding: '1px 4px', width: 76 } }}
+                          inputProps={{ style: { fontSize: '0.75rem', padding: '1px 2px', width: 60 } }}
                           sx={{ '& .MuiOutlinedInput-root': { height: 24 } }} />
                       </TD>
                       <TD center>

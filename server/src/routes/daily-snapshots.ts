@@ -8,7 +8,13 @@ const router = Router();
 router.get('/', authenticateToken, async (_req: AuthRequest, res: Response) => {
   try {
     const result = await pool.query(
-      `SELECT id, snapshot_date, total_patients, created_by_name, created_at
+      `SELECT id, snapshot_date, total_patients, created_by_name, created_at,
+         COALESCE(
+           (SELECT COUNT(*)::int
+            FROM jsonb_array_elements(snapshot_data->'treatments') t
+            WHERE t->>'status' = 'done'),
+           0
+         ) AS done_patients
        FROM daily_snapshots
        ORDER BY snapshot_date DESC, created_at DESC
        LIMIT 200`

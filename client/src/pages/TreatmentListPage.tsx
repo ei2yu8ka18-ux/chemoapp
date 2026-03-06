@@ -6,7 +6,7 @@ import {
   DialogContent, DialogActions, IconButton, FormControlLabel,
   Checkbox, FormGroup, Snackbar, Alert,
 } from '@mui/material';
-import { Book, Add, Remove, Save } from '@mui/icons-material';
+import { Logout, Add, Remove, Save } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import api from '../services/api';
@@ -318,25 +318,21 @@ export default function TreatmentListPage() {
               border: '1px solid rgba(255,255,255,0.4)',
               borderRadius: 4,
               color: '#fff',
-              fontSize: '0.82rem',
-              padding: '2px 6px',
-              height: 26,
+              fontSize: '1.05rem',
+              padding: '3px 8px',
+              height: 34,
               colorScheme: 'dark',
             }}
           />
-          <Typography fontWeight="bold" sx={{ fontSize: '0.95rem', letterSpacing: 0.5 }}>
-            {dateLabel}
-          </Typography>
-
           {/* あと〇件(赤) / 全〇件(白) */}
           <Box sx={{
             display: 'flex', alignItems: 'center',
             bgcolor: '#2c3e50', borderRadius: 1, px: 0.75, py: 0.2,
           }}>
-            <Typography component="span" sx={{ fontSize: '0.78rem', fontWeight: 'bold', color: '#e74c3c' }}>
+            <Typography component="span" sx={{ fontSize: '1.15rem', fontWeight: 'bold', color: '#e74c3c' }}>
               あと {remaining}件
             </Typography>
-            <Typography component="span" sx={{ fontSize: '0.78rem', color: '#ecf0f1' }}>
+            <Typography component="span" sx={{ fontSize: '0.85rem', color: '#ecf0f1' }}>
               &nbsp;/&nbsp;全 {treatments.length}件
             </Typography>
           </Box>
@@ -406,13 +402,13 @@ export default function TreatmentListPage() {
               sx={{ ml: 0 }} />
           </Box>
 
-          <Button color="inherit" size="small" startIcon={<Book />}
-            onClick={() => navigate('/diary')}
-            sx={{ fontSize: '0.72rem', border: '1px solid rgba(255,255,255,0.5)', ...btnSx }}>
-            業務日誌
-          </Button>
           <Typography variant="body2" sx={{ fontSize: '0.78rem' }}>{user?.displayName}</Typography>
-          <Button color="inherit" size="small" onClick={logout} sx={{ fontSize: '0.72rem' }}>ログアウト</Button>
+          <Button color="inherit" size="small" onClick={logout}
+            sx={{ fontSize: '0.72rem', display: 'flex', flexDirection: 'column', alignItems: 'center',
+              gap: 0, lineHeight: 1.2, py: 0.25, minWidth: 0, px: 0.75 }}>
+            ログアウト
+            <Logout sx={{ fontSize: '1rem', mt: 0.25 }} />
+          </Button>
         </Toolbar>
       </AppBar>
 
@@ -431,32 +427,29 @@ export default function TreatmentListPage() {
             <Table size="small" sx={{ borderCollapse: 'collapse', minWidth: 1050 }}>
               <TableHead>
                 <TableRow sx={{ bgcolor: '#27ae60' }}>
-                  <TableCell sx={{ ...cellSx, color: '#fff', fontWeight: 'bold', width: 40, textAlign: 'center', fontSize: '0.72rem' }}>
+                  <TableCell sx={{ ...cellSx, color: '#fff', fontWeight: 'bold', width: 40, textAlign: 'center', fontSize: '0.78rem' }}>
                     予定時間
                   </TableCell>
-                  <TableCell sx={{ ...cellSx, color: '#fff', fontWeight: 'bold', width: 48, fontSize: '0.68rem' }}>
+                  <TableCell sx={{ ...cellSx, color: '#fff', fontWeight: 'bold', width: 48, fontSize: '0.78rem' }}>
                     診療科<br/>医師
                   </TableCell>
-                  <TableCell sx={{ ...cellSx, color: '#fff', fontWeight: 'bold', width: 108 }}>実施予定患者</TableCell>
-                  <TableCell sx={{ ...cellSx, color: '#fff', fontWeight: 'bold', width: 108 }}>レジメン</TableCell>
-                  <TableCell sx={{ ...cellSx, color: '#fff', fontWeight: 'bold', width: 72, fontSize: '0.68rem' }}>
-                    前回の<br/>緊急処方情報
+                  <TableCell sx={{ ...cellSx, color: '#fff', fontWeight: 'bold', width: 108, fontSize: '0.78rem' }}>実施予定患者</TableCell>
+                  <TableCell sx={{ ...cellSx, color: '#fff', fontWeight: 'bold', width: 108, fontSize: '0.78rem' }}>レジメン</TableCell>
+                  <TableCell sx={{ ...cellSx, color: '#fff', fontWeight: 'bold', width: 72, fontSize: '0.78rem' }}>
+                    緊急処方<br/>（前回）
                   </TableCell>
-                  <TableCell sx={{ ...cellSx, color: '#fff', fontWeight: 'bold', width: 60, fontSize: '0.68rem' }}>
+                  <TableCell sx={{ ...cellSx, color: '#fff', fontWeight: 'bold', width: 60, fontSize: '0.78rem' }}>
                     注射情報<br/>(Bis/VB12)
                   </TableCell>
-                  <TableCell colSpan={5} sx={{ ...cellSx, color: '#fff', fontWeight: 'bold', textAlign: 'center', fontSize: '0.68rem' }}>
+                  <TableCell colSpan={5} sx={{ ...cellSx, color: '#fff', fontWeight: 'bold', textAlign: 'center', fontSize: '0.78rem' }}>
                     採血情報（CTCAE v5.0）<br/>
                     <span style={{ color: '#90caf9' }}>■</span>G1&nbsp;
                     <span style={{ color: '#ffe0b2' }}>■</span>G2&nbsp;
                     <span style={{ color: '#fff9c4' }}>■</span>G3&nbsp;
                     <span style={{ color: '#ffcdd2' }}>■</span>G4
                   </TableCell>
-                  <TableCell className="status-col" sx={{ ...cellSx, color: '#fff', fontWeight: 'bold', width: 58, textAlign: 'center' }}>実施可否</TableCell>
-                  <TableCell sx={{ ...cellSx, color: '#fff', fontWeight: 'bold', width: 100 }}>備考</TableCell>
-                  <TableCell sx={{ ...cellSx, color: '#fff', fontWeight: 'bold', width: 72, fontSize: '0.68rem' }}>
-                    Chemo<br/>実施状況
-                  </TableCell>
+                  <TableCell className="status-col" sx={{ ...cellSx, color: '#fff', fontWeight: 'bold', width: 58, textAlign: 'center', fontSize: '0.78rem' }}>実施可否</TableCell>
+                  <TableCell sx={{ ...cellSx, color: '#fff', fontWeight: 'bold', width: 160, fontSize: '0.78rem' }}>備考</TableCell>
                 </TableRow>
               </TableHead>
 
@@ -530,9 +523,16 @@ export default function TreatmentListPage() {
                             </Typography>
                             <PrescChips value={t.prescription_type} />
                             {t.status !== 'pending' && (
-                              <Typography sx={{ fontSize: '0.65rem', fontWeight: 'bold', color: STATUS_COLOR[t.status], mt: 0.25 }}>
-                                {STATUS_LABEL[t.status]} {fmtTime(t.status_changed_at)}
-                              </Typography>
+                              <Box sx={{ mt: 0.25 }}>
+                                <Typography sx={{ fontSize: '0.68rem', fontWeight: 'bold', color: STATUS_COLOR[t.status], lineHeight: 1.4 }}>
+                                  【{STATUS_LABEL[t.status]} {fmtTime(t.status_changed_at)}】
+                                </Typography>
+                                {t.scheduled_time && (
+                                  <Typography sx={{ fontSize: '0.62rem', color: '#555', lineHeight: 1.4 }}>
+                                    【開始 {t.scheduled_time.substring(0, 5)}～】
+                                  </Typography>
+                                )}
+                              </Box>
                             )}
                           </TableCell>
                         )}
@@ -608,15 +608,19 @@ export default function TreatmentListPage() {
                               p: '1px 2px',
                               bgcolor: grade > 0 ? GRADE_BG[grade] : bg,
                               width: 58, minWidth: 58, maxWidth: 58,
-                              verticalAlign: 'top',
+                              verticalAlign: 'middle',
+                              textAlign: 'center',
                             }}>
+                              <Typography sx={{ fontSize: '0.56rem', color: '#888', lineHeight: 1, display: 'block' }}>
+                                {f.label}
+                              </Typography>
                               <Typography sx={{
-                                fontSize: '0.6rem',
+                                fontSize: '0.65rem',
                                 fontWeight: grade > 0 ? 'bold' : 'normal',
                                 color: grade > 0 ? '#333' : '#555',
-                                whiteSpace: 'nowrap',
+                                lineHeight: 1.2,
+                                display: 'block',
                               }}>
-                                <span style={{ color: '#888' }}>{f.label}:</span>
                                 {numVal != null ? numVal : '-'}
                               </Typography>
                             </TableCell>
@@ -674,10 +678,6 @@ export default function TreatmentListPage() {
                           </TableCell>
                         )}
 
-                        {/* Chemo実施状況（最右・スタブ） */}
-                        {rowIdx === 0 && (
-                          <TableCell rowSpan={3} sx={{ ...cellSx, verticalAlign: 'top', bgcolor: bg, borderBottom: spanBorder }} />
-                        )}
                       </TableRow>
                     );
                   });
