@@ -8,6 +8,7 @@ import HistoryPage from './pages/HistoryPage';
 import DiaryPage from './pages/DiaryPage';
 import DiaryListPage from './pages/DiaryListPage';
 import MonthlyPage from './pages/MonthlyPage';
+import GuidancePage from './pages/GuidancePage';
 import InterventionReportPage from './pages/InterventionReportPage';
 import PasswordChangePage from './pages/PasswordChangePage';
 import PreConsultSettingsPage from './pages/PreConsultSettingsPage';
@@ -65,7 +66,7 @@ function AppRoutes() {
         <PrivateRoute><AppLayout><ComingSoonPage title="レジメン監査" /></AppLayout></PrivateRoute>
       } />
       <Route path="/guidance" element={
-        <PrivateRoute><AppLayout><ComingSoonPage title="点滴説明" /></AppLayout></PrivateRoute>
+        <PrivateRoute><AppLayout><GuidancePage /></AppLayout></PrivateRoute>
       } />
       <Route path="/diary" element={
         <PrivateRoute><AppLayout><DiaryPage /></AppLayout></PrivateRoute>
