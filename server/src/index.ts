@@ -10,6 +10,7 @@ import monthlyRouter from './routes/monthly';
 import settingsRouter from './routes/settings';
 import dailySnapshotsRouter from './routes/daily-snapshots';
 import adminRouter from './routes/admin';
+import guidanceRouter from './routes/guidance';
 
 dotenv.config();
 
@@ -41,6 +42,7 @@ app.use('/api/monthly',          monthlyRouter);
 app.use('/api/settings',         settingsRouter);
 app.use('/api/daily-snapshots',  dailySnapshotsRouter);
 app.use('/api/admin',            adminRouter);
+app.use('/api/guidance',         guidanceRouter);
 
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
