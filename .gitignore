@@ -20,3 +20,8 @@ Thumbs.db
 # エディタ
 .vscode/
 *.swp
+
+# 環境変数（機密情報）
+.env
+.env.local
+.env.*.local

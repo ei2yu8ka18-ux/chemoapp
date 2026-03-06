@@ -167,8 +167,8 @@ export default function DiaryPage() {
       {/* 印刷CSS */}
       <style>{`
         @media print {
-          @page { size: A4 landscape; margin: 6mm; }
-          html, body { font-size: 7.5pt !important; }
+          @page { size: A4 portrait; margin: 6mm; }
+          html, body { font-size: 7pt !important; }
           .no-print { display: none !important; }
           .print-only { display: block !important; }
           .diary-print-root {
@@ -176,18 +176,18 @@ export default function DiaryPage() {
             max-width: 100% !important;
           }
           .print-grid {
-            display: grid !important;
-            grid-template-columns: 27% 72% !important;
-            grid-template-rows: auto auto auto !important;
+            display: flex !important;
+            flex-direction: column !important;
             gap: 2mm !important;
             padding: 0 !important;
             max-width: 100% !important;
           }
-          .print-left-top  { grid-column: 1; grid-row: 1; }
-          .print-right-top { grid-column: 2; grid-row: 1; display: flex !important; flex-direction: row !important; gap: 2mm !important; }
+          .print-right-top {
+            display: flex !important;
+            flex-direction: row !important;
+            gap: 2mm !important;
+          }
           .print-right-top .MuiPaper-root { flex: 1 !important; min-width: 0 !important; }
-          .print-bottom    { grid-column: 1 / span 2; grid-row: 2; }
-          .print-notes     { grid-column: 1 / span 2; grid-row: 3; }
           .MuiPaper-root {
             box-shadow: none !important;
             border: 1px solid #bbb !important;
@@ -198,6 +198,7 @@ export default function DiaryPage() {
             font-size: 7pt !important;
             padding: 1px 3px !important;
             line-height: 1.2 !important;
+            text-align: center !important;
           }
           .MuiOutlinedInput-root {
             border: none !important;
@@ -278,7 +279,7 @@ export default function DiaryPage() {
             <Table size="small" sx={{ borderCollapse: 'collapse' }}>
               <TableHead>
                 <TableRow>
-                  <TH>氏名</TH><TH w={44}>開始</TH><TH w={44}>終了</TH><TH>昼</TH><TH w={36}>昼休(分)</TH><TH>実働</TH>
+                  <TH w={64}>氏名</TH><TH w={52}>開始</TH><TH w={52}>終了</TH><TH w={28}>昼</TH><TH w={44}>昼休(分)</TH><TH w={44}>実働</TH>
                   <TableCell className="no-print" sx={{ p: 0, border: 0, width: 28 }} />
                 </TableRow>
               </TableHead>
@@ -291,8 +292,8 @@ export default function DiaryPage() {
                         <TextField select size="small" value={ph.pharmacist_name}
                           onChange={e => setPh(i, 'pharmacist_name', e.target.value)}
                           SelectProps={{ native: true }}
-                          sx={{ minWidth: 80, '& .MuiOutlinedInput-root': { height: 24 } }}
-                          inputProps={{ style: { fontSize: '0.78rem', padding: '1px 4px' } }}>
+                          sx={{ minWidth: 60, width: '100%', '& .MuiOutlinedInput-root': { height: 24 } }}
+                          inputProps={{ style: { fontSize: '0.78rem', padding: '1px 2px' } }}>
                           <option value=""></option>
                           {pharmacistNames.map(n => <option key={n} value={n}>{n}</option>)}
                         </TextField>
@@ -300,13 +301,13 @@ export default function DiaryPage() {
                       <TD>
                         <TextField type="time" size="small" value={ph.start_time}
                           onChange={e => setPh(i, 'start_time', e.target.value)}
-                          inputProps={{ style: { fontSize: '0.75rem', padding: '1px 2px', width: 44 } }}
+                          inputProps={{ style: { fontSize: '0.75rem', padding: '1px 2px', width: 52 } }}
                           sx={{ '& .MuiOutlinedInput-root': { height: 24 } }} />
                       </TD>
                       <TD>
                         <TextField type="time" size="small" value={ph.end_time}
                           onChange={e => setPh(i, 'end_time', e.target.value)}
-                          inputProps={{ style: { fontSize: '0.75rem', padding: '1px 2px', width: 44 } }}
+                          inputProps={{ style: { fontSize: '0.75rem', padding: '1px 2px', width: 52 } }}
                           sx={{ '& .MuiOutlinedInput-root': { height: 24 } }} />
                       </TD>
                       <TD center>
