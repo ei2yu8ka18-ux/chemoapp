@@ -6,6 +6,7 @@ import {
 } from '@mui/material';
 import { Download, Print, PrintOutlined } from '@mui/icons-material';
 import { useAuth } from '../contexts/AuthContext';
+import api from '../services/api';
 
 // ─── 型定義 ──────────────────────────────────────────────────────
 interface OrderRow {
@@ -323,14 +324,8 @@ export default function GuidancePage() {
     setPatients([]);
     setSelected(null);
     try {
-      const res = await fetch(`/api/guidance/orders?date=${date}`, {
-        credentials: 'include',
-      });
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        throw new Error(body.error ?? `HTTP ${res.status}`);
-      }
-      const rows: OrderRow[] = await res.json();
+      const res = await api.get<OrderRow[]>('/guidance/orders', { params: { date } });
+      const rows = res.data;
       if (!rows.length) {
         setError('該当日のオーダーデータが見つかりません');
         return;
