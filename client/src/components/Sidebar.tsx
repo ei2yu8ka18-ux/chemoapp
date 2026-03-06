@@ -27,7 +27,7 @@ const NAV_ITEMS = [
   { label: '指導歴',         path: '/history',               icon: <History fontSize="small" /> },
   { label: '月報',           path: '/monthly',               icon: <BarChart fontSize="small" /> },
   { label: '介入報告書',     path: '/intervention-report',   icon: <Summarize fontSize="small" /> },
-  { label: '年報',           path: '/annual',                icon: <TrendingUp fontSize="small" />,   disabled: true },
+  { label: '年報',           path: '/annual',                icon: <TrendingUp fontSize="small" /> },
 ];
 
 const ADMIN_ITEMS = [

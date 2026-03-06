@@ -8,6 +8,7 @@ import HistoryPage from './pages/HistoryPage';
 import DiaryPage from './pages/DiaryPage';
 import DiaryListPage from './pages/DiaryListPage';
 import MonthlyPage from './pages/MonthlyPage';
+import AnnualPage  from './pages/AnnualPage';
 import GuidancePage from './pages/GuidancePage';
 import InterventionReportPage from './pages/InterventionReportPage';
 import PasswordChangePage from './pages/PasswordChangePage';
@@ -84,7 +85,7 @@ function AppRoutes() {
         <PrivateRoute><AppLayout><InterventionReportPage /></AppLayout></PrivateRoute>
       } />
       <Route path="/annual" element={
-        <PrivateRoute><AppLayout><ComingSoonPage title="年報" /></AppLayout></PrivateRoute>
+        <PrivateRoute><AppLayout><AnnualPage /></AppLayout></PrivateRoute>
       } />
       <Route path="/change-password" element={
         <PrivateRoute><AppLayout><PasswordChangePage /></AppLayout></PrivateRoute>
