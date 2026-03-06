@@ -280,7 +280,7 @@ export default function InterventionModal({ open, treatment, onClose, onSaved }:
         <Box sx={{ display: 'flex', gap: 1, flexGrow: 1, minHeight: 0 }}>
 
           {/* 介入分類 */}
-          <Box sx={{ width: 110, flexShrink: 0, display: 'flex', flexDirection: 'column' }}>
+          <Box sx={{ width: 155, flexShrink: 0, display: 'flex', flexDirection: 'column' }}>
             <Typography sx={{ fontSize: '0.75rem', fontWeight: 'bold', mb: 0.25 }}>介入分類</Typography>
             <List sx={listBoxSx}>
               {INTERVENTION_CATEGORIES.map(cat => (
@@ -295,7 +295,7 @@ export default function InterventionModal({ open, treatment, onClose, onSaved }:
           </Box>
 
           {/* 介入詳細 */}
-          <Box sx={{ width: 140, flexShrink: 0, display: 'flex', flexDirection: 'column' }}>
+          <Box sx={{ width: 195, flexShrink: 0, display: 'flex', flexDirection: 'column' }}>
             <Typography sx={{ fontSize: '0.75rem', fontWeight: 'bold', mb: 0.25 }}>介入詳細</Typography>
             <List sx={listBoxSx}>
               {currentDetails.length > 0 ? (
@@ -316,7 +316,7 @@ export default function InterventionModal({ open, treatment, onClose, onSaved }:
           </Box>
 
           {/* 介入内容 */}
-          <Box sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column' }}>
+          <Box sx={{ flex: '1 1 0', maxWidth: '40%', minWidth: 0, display: 'flex', flexDirection: 'column' }}>
             <Typography sx={{ fontSize: '0.75rem', fontWeight: 'bold', mb: 0.25 }}>
               介入内容（状況・提案結果）
             </Typography>

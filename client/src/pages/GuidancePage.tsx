@@ -109,6 +109,7 @@ function parseMins(raw: string, code: string): number {
 function fmtDur(min: number): string {
   if (min <= 0) return '';
   const r = Math.min(240, Math.round(min / 5) * 5);
+  if (r <= 0) return '';
   if (r % 60 === 0) return `${r / 60}時間`;
   if (r > 60) return `${Math.floor(r / 60)}時間${r % 60}分`;
   return `${r}分`;
@@ -122,7 +123,9 @@ function fmtTotal(min: number): string {
 }
 
 function extractVol(name: string): number | null {
-  const m = name.match(/(\d+)\s*[mｍ][lＬ]/i);
+  // 全角数字を半角に変換してから抽出
+  const s = name.replace(/[０-９]/g, c => String.fromCharCode(c.charCodeAt(0) - 0xFF10 + 0x30));
+  const m = s.match(/(\d+)\s*[mｍ][lＬ]/i);
   return m ? parseInt(m[1]) : null;
 }
 
@@ -217,12 +220,13 @@ function parseOrderRows(rows: OrderRow[]): PatientSheet[] {
       }
       const names = [...nameMap.entries()].map(([text, isHR]) => ({ text, isHR }));
 
+      const isEqual  = simStart;
       const duration = takeHome ? '持ち帰り' : fmtDur(groupMax);
-      if (!takeHome) totalMin += groupMax;
+      if (!takeHome && !isEqual) totalMin += groupMax;
 
       groups.push({
         index: gi, image: img, duration,
-        names, takeHome, isEqual: false, vesicantType,
+        names, takeHome, isEqual, vesicantType,
       });
       gi++;
     }
@@ -296,7 +300,7 @@ function ExplanationSheet({ ps }: { ps: PatientSheet }) {
                     alt={grp.vesicantType}
                     style={{
                       position: 'absolute', top: 0, right: 0,
-                      width: 30, height: 30, objectFit: 'contain', zIndex: 2,
+                      width: 45, height: 45, objectFit: 'contain', zIndex: 2,
                     }}
                     onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }}
                   />
