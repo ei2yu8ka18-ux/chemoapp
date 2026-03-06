@@ -115,7 +115,7 @@ function fmtTime(iso: string | null): string {
 
 const PRINT_CSS = `
 @media print {
-  @page { size: A4 portrait; margin: 5mm; }
+  @page { size: A4 landscape; margin: 5mm; }
   html, body { font-size: 5.5pt !important; }
   .no-print { display: none !important; }
   .MuiDialog-root .no-print { display: none !important; }

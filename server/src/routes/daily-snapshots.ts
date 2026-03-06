@@ -26,7 +26,7 @@ router.get('/', authenticateToken, async (_req: AuthRequest, res: Response) => {
   }
 });
 
-// POST /api/daily-snapshots - save a snapshot
+// POST /api/daily-snapshots - save (upsert by date)
 router.post('/', authenticateToken, async (req: AuthRequest, res: Response) => {
   const { snapshot_date, snapshot_data, total_patients } = req.body;
   if (!snapshot_date || !snapshot_data) {
@@ -37,12 +37,31 @@ router.post('/', authenticateToken, async (req: AuthRequest, res: Response) => {
       'SELECT display_name FROM users WHERE id = $1', [req.userId]
     );
     const createdByName = userResult.rows[0]?.display_name || '';
-    const result = await pool.query(
-      `INSERT INTO daily_snapshots (snapshot_date, snapshot_data, total_patients, created_by_name)
-       VALUES ($1, $2, $3, $4)
-       RETURNING id, snapshot_date, total_patients, created_by_name, created_at`,
-      [snapshot_date, JSON.stringify(snapshot_data), total_patients || 0, createdByName]
+
+    // Check if snapshot already exists for this date
+    const existing = await pool.query(
+      'SELECT id FROM daily_snapshots WHERE snapshot_date = $1', [snapshot_date]
     );
+
+    let result;
+    if (existing.rows.length > 0) {
+      // Update existing (upsert)
+      result = await pool.query(
+        `UPDATE daily_snapshots
+         SET snapshot_data = $1, total_patients = $2, created_by_name = $3,
+             created_at = CURRENT_TIMESTAMP
+         WHERE snapshot_date = $4
+         RETURNING id, snapshot_date, total_patients, created_by_name, created_at`,
+        [JSON.stringify(snapshot_data), total_patients || 0, createdByName, snapshot_date]
+      );
+    } else {
+      result = await pool.query(
+        `INSERT INTO daily_snapshots (snapshot_date, snapshot_data, total_patients, created_by_name)
+         VALUES ($1, $2, $3, $4)
+         RETURNING id, snapshot_date, total_patients, created_by_name, created_at`,
+        [snapshot_date, JSON.stringify(snapshot_data), total_patients || 0, createdByName]
+      );
+    }
     res.json(result.rows[0]);
   } catch (err) {
     console.error(err);

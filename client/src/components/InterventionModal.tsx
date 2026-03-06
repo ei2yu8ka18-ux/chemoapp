@@ -86,7 +86,7 @@ interface Props {
 
 const listBoxSx = {
   border: '1px solid #bdbdbd', borderRadius: 1,
-  height: 220, overflowY: 'auto' as const, p: 0, bgcolor: '#fff',
+  height: 380, overflowY: 'auto' as const, p: 0, bgcolor: '#fff',
 };
 const itemSx = {
   py: 0.25, px: 1,
@@ -162,7 +162,7 @@ export default function InterventionModal({ open, treatment, onClose, onSaved }:
   return (
     <Dialog open={open} onClose={onClose} maxWidth={false} fullWidth
       PaperProps={{ sx: {
-        width: '95vw', maxWidth: '95vw',
+        width: '85vw', maxWidth: '85vw',
         maxHeight: '92vh',
         bgcolor: '#f5f5f5',
       } }}>
@@ -286,7 +286,7 @@ export default function InterventionModal({ open, treatment, onClose, onSaved }:
           </Grid>
 
           {/* 介入内容（広め） */}
-          <Grid item xs={6}>
+          <Grid item xs={7}>
             <Typography sx={{ fontSize: '0.75rem', fontWeight: 'bold', mb: 0.25 }}>
               介入内容（状況・提案結果）
             </Typography>
@@ -297,10 +297,10 @@ export default function InterventionModal({ open, treatment, onClose, onSaved }:
               inputProps={{ style: { fontSize: '0.82rem' } }} />
           </Grid>
 
-          {/* 薬剤師 + チェックボックス（縦並び） */}
-          <Grid item xs={2}>
+          {/* 薬剤師 */}
+          <Grid item xs={1} sx={{ minWidth: 72 }}>
             <Typography sx={{ fontSize: '0.75rem', fontWeight: 'bold', mb: 0.25 }}>薬剤師</Typography>
-            <List sx={{ ...listBoxSx, height: 140, minWidth: 72, mb: 0.5 }}>
+            <List sx={{ ...listBoxSx, height: 380 }}>
               {pharmacists.map(ph => (
                 <ListItemButton key={ph}
                   selected={form.pharmacist_name === ph}
@@ -310,39 +310,37 @@ export default function InterventionModal({ open, treatment, onClose, onSaved }:
                 </ListItemButton>
               ))}
             </List>
-
-            {/* チェックボックス3つ（縦並び） */}
-            <Box sx={{ bgcolor: '#fff', border: '1px solid #ccc', borderRadius: 1, p: 0.5 }}>
-              <FormGroup>
-                <FormControlLabel
-                  control={<Checkbox size="small" checked={form.prescription_changed}
-                    onChange={e => set('prescription_changed', e.target.checked)} sx={{ py: 0.1 }} />}
-                  label={<Typography sx={{ fontSize: '0.72rem' }}>処方変更あり</Typography>} />
-                <FormControlLabel
-                  control={<Checkbox size="small" checked={form.proxy_prescription}
-                    onChange={e => set('proxy_prescription', e.target.checked)} sx={{ py: 0.1 }} />}
-                  label={<Typography sx={{ fontSize: '0.72rem' }}>代行処方</Typography>} />
-                <FormControlLabel
-                  control={<Checkbox size="small" checked={form.case_candidate}
-                    onChange={e => set('case_candidate', e.target.checked)} sx={{ py: 0.1 }} />}
-                  label={<Typography sx={{ fontSize: '0.72rem' }}>症例候補</Typography>} />
-              </FormGroup>
-            </Box>
-
-            {/* 記録ID */}
-            <Typography sx={{ fontSize: '0.65rem', color: '#555', mt: 0.5, wordBreak: 'break-all' }}>
-              記録ID<br/>{recordId}
-            </Typography>
           </Grid>
         </Grid>
 
       </DialogContent>
 
-      <DialogActions sx={{ px: 2, py: 0.75, borderTop: '1px solid #ccc', gap: 1 }}>
-        <Button onClick={onClose} variant="outlined" size="small">とじる</Button>
-        <Button onClick={handleSave} variant="contained" size="small" disabled={saving}>
-          {saving ? '保存中...' : '記録'}
-        </Button>
+      <DialogActions sx={{ px: 2, py: 0.75, borderTop: '1px solid #ccc', flexDirection: 'column', alignItems: 'stretch', gap: 0.5 }}>
+        {/* チェックボックス行 */}
+        <Box sx={{ display: 'flex', gap: 0.5, alignItems: 'center' }}>
+          <FormControlLabel
+            control={<Checkbox size="small" checked={form.prescription_changed}
+              onChange={e => set('prescription_changed', e.target.checked)} sx={{ py: 0.1 }} />}
+            label={<Typography sx={{ fontSize: '0.72rem' }}>処方変更あり</Typography>} />
+          <FormControlLabel
+            control={<Checkbox size="small" checked={form.proxy_prescription}
+              onChange={e => set('proxy_prescription', e.target.checked)} sx={{ py: 0.1 }} />}
+            label={<Typography sx={{ fontSize: '0.72rem' }}>代行処方</Typography>} />
+          <FormControlLabel
+            control={<Checkbox size="small" checked={form.case_candidate}
+              onChange={e => set('case_candidate', e.target.checked)} sx={{ py: 0.1 }} />}
+            label={<Typography sx={{ fontSize: '0.72rem' }}>症例候補</Typography>} />
+        </Box>
+        {/* 記録ID＋ボタン行 */}
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <Typography sx={{ fontSize: '0.65rem', color: '#555', mr: 'auto', wordBreak: 'break-all' }}>
+            記録ID: {recordId}
+          </Typography>
+          <Button onClick={onClose} variant="outlined" size="small">とじる</Button>
+          <Button onClick={handleSave} variant="contained" size="small" disabled={saving}>
+            {saving ? '保存中...' : '記録'}
+          </Button>
+        </Box>
       </DialogActions>
     </Dialog>
   );

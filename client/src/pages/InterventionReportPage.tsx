@@ -9,7 +9,7 @@ import api from '../services/api';
 
 const PRINT_CSS = `
 @media print {
-  @page { size: A4 landscape; margin: 8mm; }
+  @page { size: A4 portrait; margin: 8mm; }
   html, body { font-size: 7pt !important; }
   .no-print { display: none !important; }
   table { border-collapse: collapse !important; width: 100% !important; page-break-inside: auto; }
@@ -135,9 +135,9 @@ export default function InterventionReportPage() {
                 <TableHead>
                   <TableRow>
                     <TH w={18}>No</TH>
-                    <TH w={160}>レジメン</TH>
-                    <TH w={120}>介入分類</TH>
-                    <TH w={120}>詳細</TH>
+                    <TH w={90}>レジメン</TH>
+                    <TH w={75}>介入分類</TH>
+                    <TH w={85}>詳細</TH>
                     <TH>介入内容</TH>
                     <TH w={50}>薬剤師</TH>
                   </TableRow>

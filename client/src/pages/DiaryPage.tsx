@@ -177,7 +177,7 @@ export default function DiaryPage() {
           }
           .print-grid {
             display: grid !important;
-            grid-template-columns: 47% 51% !important;
+            grid-template-columns: 27% 72% !important;
             grid-template-rows: auto auto auto !important;
             gap: 2mm !important;
             padding: 0 !important;
@@ -278,7 +278,7 @@ export default function DiaryPage() {
             <Table size="small" sx={{ borderCollapse: 'collapse' }}>
               <TableHead>
                 <TableRow>
-                  <TH>氏名</TH><TH w={58}>開始</TH><TH w={58}>終了</TH><TH>昼</TH><TH w={44}>昼休(分)</TH><TH>実働</TH>
+                  <TH>氏名</TH><TH w={44}>開始</TH><TH w={44}>終了</TH><TH>昼</TH><TH w={36}>昼休(分)</TH><TH>実働</TH>
                   <TableCell className="no-print" sx={{ p: 0, border: 0, width: 28 }} />
                 </TableRow>
               </TableHead>
@@ -300,13 +300,13 @@ export default function DiaryPage() {
                       <TD>
                         <TextField type="time" size="small" value={ph.start_time}
                           onChange={e => setPh(i, 'start_time', e.target.value)}
-                          inputProps={{ style: { fontSize: '0.75rem', padding: '1px 2px', width: 60 } }}
+                          inputProps={{ style: { fontSize: '0.75rem', padding: '1px 2px', width: 44 } }}
                           sx={{ '& .MuiOutlinedInput-root': { height: 24 } }} />
                       </TD>
                       <TD>
                         <TextField type="time" size="small" value={ph.end_time}
                           onChange={e => setPh(i, 'end_time', e.target.value)}
-                          inputProps={{ style: { fontSize: '0.75rem', padding: '1px 2px', width: 60 } }}
+                          inputProps={{ style: { fontSize: '0.75rem', padding: '1px 2px', width: 44 } }}
                           sx={{ '& .MuiOutlinedInput-root': { height: 24 } }} />
                       </TD>
                       <TD center>
@@ -316,7 +316,7 @@ export default function DiaryPage() {
                       <TD>
                         <TextField type="number" size="small" value={ph.lunch_minutes}
                           onChange={e => setPh(i, 'lunch_minutes', Number(e.target.value) || 0)}
-                          inputProps={{ min: 0, style: { fontSize: '0.78rem', padding: '1px 4px', width: 44 } }}
+                          inputProps={{ min: 0, style: { fontSize: '0.78rem', padding: '1px 4px', width: 36 } }}
                           sx={{ '& .MuiOutlinedInput-root': { height: 24 } }} />
                       </TD>
                       <TD bold>{fmtMin(wm)}</TD>

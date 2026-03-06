@@ -15,7 +15,8 @@ const FULL_SELECT = `
     p.doctor,
     p.diagnosis,
     r.name    AS regimen_name,
-    st.scheduled_date
+    st.scheduled_date,
+    st.scheduled_date AS treatment_date
   FROM interventions i
   JOIN scheduled_treatments st ON st.id = i.treatment_id
   JOIN patients p ON p.id = st.patient_id
