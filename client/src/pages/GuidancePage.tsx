@@ -13,6 +13,7 @@ interface OrderRow {
   order_no:     string;
   order_date:   string;
   patient_name: string;
+  patient_no:   string;   // カルテ番号
   drug_code_sc: string;
   drug_code:    string;
   drug_name:    string;
@@ -32,6 +33,7 @@ interface DrugGroup {
 
 interface PatientSheet {
   patientId:   string;
+  patientNo:   string;   // カルテ番号
   patientName: string;
   orderDate:   string;
   totalTime:   string;
@@ -141,6 +143,7 @@ function parseOrderRows(rows: OrderRow[]): PatientSheet[] {
   for (const [pid, orderMap] of pat) {
     const firstRow = [...orderMap.values()][0][0];
     const patientName = firstRow.patient_name.trim();
+    const patientNo   = firstRow.patient_no ?? '';
     const rawDate     = firstRow.order_date.trim();
     const orderDate   = rawDate.match(/^\d{8}$/)
       ? `${rawDate.slice(0,4)}/${rawDate.slice(4,6)}/${rawDate.slice(6,8)}`
@@ -193,7 +196,7 @@ function parseOrderRows(rows: OrderRow[]): PatientSheet[] {
       gi++;
     }
 
-    result.push({ patientId: pid, patientName, orderDate, totalTime: fmtTotal(totalMin), groups });
+    result.push({ patientId: pid, patientNo, patientName, orderDate, totalTime: fmtTotal(totalMin), groups });
   }
 
   return result;
@@ -463,7 +466,7 @@ export default function GuidancePage() {
                   >
                     <ListItemText
                       primary={p.patientName || p.patientId}
-                      secondary={`${p.groups.length}bag · ${p.totalTime}`}
+                      secondary={`${p.patientNo} · ${p.groups.length}bag · ${p.totalTime}`}
                       primaryTypographyProps={{ fontSize: '0.78rem', fontWeight: 'bold', noWrap: true }}
                       secondaryTypographyProps={{ fontSize: '0.62rem' }}
                     />
