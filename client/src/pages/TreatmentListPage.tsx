@@ -529,7 +529,7 @@ export default function TreatmentListPage() {
                             </Typography>
                             <PrescChips value={t.prescription_type} />
                             {t.status !== 'pending' && (
-                              <Box sx={{ mt: 0.5, display: 'flex', flexDirection: 'column', gap: 0.25 }}>
+                              <Box sx={{ mt: 0.5, display: 'flex', flexDirection: 'row', flexWrap: 'wrap', gap: 0.5, alignItems: 'center' }}>
                                 <Typography sx={{ fontSize: '0.75rem', fontWeight: 'bold', color: STATUS_COLOR[t.status], lineHeight: 1.4 }}>
                                   【{STATUS_LABEL[t.status]} {fmtTime(t.status_changed_at)}】
                                 </Typography>

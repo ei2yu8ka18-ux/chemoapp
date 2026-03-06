@@ -180,8 +180,8 @@ export default function InterventionModal({ open, treatment, onClose, onSaved }:
   return (
     <Dialog open={open} onClose={onClose} maxWidth={false} fullWidth
       PaperProps={{ sx: {
-        width: '88vw', maxWidth: '88vw',
-        height: '90vh', maxHeight: '90vh',
+        width: '70vw', maxWidth: '70vw',
+        height: '60vh', maxHeight: '60vh',
         bgcolor: '#f0f4f8',
         display: 'flex', flexDirection: 'column',
       } }}>

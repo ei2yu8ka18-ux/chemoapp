@@ -351,7 +351,7 @@ function ExplanationSheet({ ps }: { ps: PatientSheet }) {
         <img
           src="/images/mascot.png"
           alt="マスコット"
-          style={{ width: 64, height: 64, objectFit: 'contain' }}
+          style={{ width: 192, height: 192, objectFit: 'contain' }}
           onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }}
         />
       </Box>
