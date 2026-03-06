@@ -24,13 +24,30 @@ interface OrderRow {
 }
 
 interface DrugGroup {
-  index:    number;
-  image:    string | null;
-  duration: string;
-  names:    string[];
-  takeHome: boolean;
-  isEqual:  boolean;
+  index:        number;
+  image:        string | null;
+  duration:     string;
+  names:        { text: string; isHR: boolean }[];  // isHR=true → 赤字表示
+  takeHome:     boolean;
+  isEqual:      boolean;
+  vesicantType: 'vesicant' | 'warning' | null;       // 付箋種別
 }
+
+// ─── vesicantシート薬剤コード ─────────────────────────────────────
+const VESICANT_CODES = new Set([
+  'I5000304','I5000303','I5000050','I5000678','I5000677',
+  'I5001311','I5000086','II5001152','I5000838','I5000839',
+  'I5000683','I5000684','I5000685','I5000147','I5000148',
+  'I5000928','I5000236','I5001310','I5000848','I5000248',
+  'I5001172','I5001173','I5000102','I5000139','I5000681',
+]);
+const WARNING_CODES = new Set([
+  'I5000859','I5000860','I5000686','I5000498','I5001080',
+  'I5001062','I5000674','I5000675','I5000152','I5000153',
+  'I5000851','I5000861','II5000862','I5000734','I5000203',
+  'I5000204','I5000238','I5000252','I5001143','I5000298',
+  'I5000858','II5000116','II5000117',
+]);
 
 interface PatientSheet {
   patientId:   string;
@@ -55,10 +72,15 @@ const DRUG_DEFAULTS: Record<string, number> = {
   'I5001112': 3, 'I5001200': 1,
 };
 
+/** 薬剤名に<HR>または〈HR〉が含まれるか判定 */
+function hasHR(raw: string): boolean {
+  return /[〈<（][ＨH][ＲR ][〉>）]/.test(raw);
+}
+
 function normName(raw: string): string {
   let s = raw
     .replace(/５/g, '5')
-    .replace(/[〈<（][ＨH][Ｒ R][〉>）]/g, '')
+    .replace(/[〈<（][ＨH][ＲR ][〉>）]/g, '')
     .replace(/注射用水PL「フソー」２０ｍＬ/g, '')
     .replace(/注射用/g, '')
     .replace(/高\)/g, '')
@@ -180,19 +202,27 @@ function parseOrderRows(rows: OrderRow[]): PatientSheet[] {
         if (!img) img = 'ns100.png';
       }
 
-      const nameSet = new Set<string>();
+      const nameMap = new Map<string, boolean>(); // name → isHR
+      let vesicantType: 'vesicant' | 'warning' | null = null;
       for (const r of oRows) {
         if (skipLevo && /レボホリナート/.test(r.drug_name)) continue;
         const n = normName(r.drug_name);
-        if (n) nameSet.add(n);
+        if (n && !nameMap.has(n)) nameMap.set(n, hasHR(r.drug_name));
+        // vesicant判定（vesicant優先）
+        if (VESICANT_CODES.has(r.drug_code)) {
+          vesicantType = 'vesicant';
+        } else if (WARNING_CODES.has(r.drug_code) && vesicantType !== 'vesicant') {
+          vesicantType = 'warning';
+        }
       }
+      const names = [...nameMap.entries()].map(([text, isHR]) => ({ text, isHR }));
 
       const duration = takeHome ? '持ち帰り' : fmtDur(groupMax);
       if (!takeHome) totalMin += groupMax;
 
       groups.push({
         index: gi, image: img, duration,
-        names: [...nameSet], takeHome, isEqual: false,
+        names, takeHome, isEqual: false, vesicantType,
       });
       gi++;
     }
@@ -245,11 +275,12 @@ function ExplanationSheet({ ps }: { ps: PatientSheet }) {
               <Typography sx={{ fontSize: '0.75rem', fontWeight: 'bold', color: '#555' }}>
                 {LABELS[grp.index] ?? ''}
               </Typography>
-              <Box sx={{ width: 72, height: 76, display: 'flex', alignItems: 'center', justifyContent: 'center', my: '1mm' }}>
+              {/* 点滴袋画像 + vesicant付箋オーバーレイ */}
+              <Box sx={{ width: 72, height: 76, display: 'flex', alignItems: 'center', justifyContent: 'center', my: '1mm', position: 'relative' }}>
                 {grp.image ? (
                   <img
                     src={`/images/drug-bags/${grp.image}`}
-                    alt={grp.names[0] || '点滴'}
+                    alt={grp.names[0]?.text || '点滴'}
                     style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }}
                     onError={e => { (e.target as HTMLImageElement).style.visibility = 'hidden'; }}
                   />
@@ -258,15 +289,33 @@ function ExplanationSheet({ ps }: { ps: PatientSheet }) {
                     <Typography sx={{ fontSize: '0.6rem', color: '#999' }}>袋</Typography>
                   </Box>
                 )}
+                {/* vesicant / warning 付箋 */}
+                {grp.vesicantType && (
+                  <img
+                    src={`/images/drug-bags/${grp.vesicantType}.png`}
+                    alt={grp.vesicantType}
+                    style={{
+                      position: 'absolute', top: 0, right: 0,
+                      width: 30, height: 30, objectFit: 'contain', zIndex: 2,
+                    }}
+                    onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                  />
+                )}
               </Box>
               {grp.duration && (
                 <Typography sx={{ fontSize: '0.72rem', fontWeight: 'bold', color: grp.takeHome ? '#c62828' : '#1565c0', textAlign: 'center' }}>
                   {grp.duration}
                 </Typography>
               )}
-              {grp.names.map((name, ni) => (
-                <Typography key={ni} sx={{ fontSize: '0.62rem', textAlign: 'center', lineHeight: 1.3, mt: '0.5mm', color: '#111', wordBreak: 'break-all', width: '100%' }}>
-                  {name}
+              {/* 薬剤名：<HR>含むものは赤字太字 */}
+              {grp.names.map((entry, ni) => (
+                <Typography key={ni} sx={{
+                  fontSize: '0.62rem', textAlign: 'center', lineHeight: 1.3, mt: '0.5mm',
+                  color: entry.isHR ? '#c62828' : '#111',
+                  fontWeight: entry.isHR ? 'bold' : 'normal',
+                  wordBreak: 'break-all', width: '100%',
+                }}>
+                  {entry.text}
                 </Typography>
               ))}
             </Box>
@@ -296,8 +345,15 @@ function ExplanationSheet({ ps }: { ps: PatientSheet }) {
         </Typography>
       </Box>
 
-      <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: '2mm' }}>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', mt: '2mm' }}>
         <Typography sx={{ fontSize: '0.8rem', color: '#555' }}>外来化学療法センター</Typography>
+        {/* 印刷時右下マスコット */}
+        <img
+          src="/images/mascot.png"
+          alt="マスコット"
+          style={{ width: 64, height: 64, objectFit: 'contain' }}
+          onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }}
+        />
       </Box>
     </Box>
   );

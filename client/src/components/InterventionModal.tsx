@@ -2,15 +2,15 @@ import { useState, useEffect } from 'react';
 import {
   Dialog, DialogTitle, DialogContent, DialogActions,
   Button, Box, Typography, TextField,
-  FormControl, FormLabel, RadioGroup, FormControlLabel, Radio,
+  RadioGroup, FormControlLabel, Radio,
   Checkbox, List, ListItemButton, ListItemText,
-  Divider, Grid, FormGroup,
+  FormGroup,
 } from '@mui/material';
 import { Treatment, Intervention } from '../types/treatment';
 import api from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
 
-// ── 介入分類 → 介入詳細マスタ（VBAに準拠）────────────────────
+// ── 介入分類 → 介入詳細マスタ ─────────────────────────────────
 const DETAIL_MAP: Record<string, string[]> = {
   'オピオイド': [
     'オピオイド導入', 'オピオイド用量調節', 'オピオイド副作用対策', 'オピオイド導入延期',
@@ -28,7 +28,7 @@ const DETAIL_MAP: Record<string, string[]> = {
   '実施指示確認': ['継続', '中止'],
   '注射薬不備': [
     'アブラキサン生食量', 'インフューザーポンプ生食量', 'ゾレドロン酸', '抗コリン症状対策',
-    'VB12製剤', 'ポート前後フラッシュ', 'ポラーミン', 'ランマーク', '削除忘れ', '他',
+    'VB12製剤', 'ポートフラッシュ用', 'ポラーミン', 'ランマーク', '削除忘れ', '他',
   ],
   '内服薬不備': [
     'DEX処方漏れ', 'APR処方漏れ', 'ARP・DEX処方漏れ', '残薬調整',
@@ -84,29 +84,49 @@ interface Props {
   onSaved?: () => void;
 }
 
+// ── 共通スタイル ───────────────────────────────────────────────
 const listBoxSx = {
   border: '1px solid #bdbdbd', borderRadius: 1,
-  height: 380, overflowY: 'auto' as const, p: 0, bgcolor: '#fff',
+  overflowY: 'auto' as const, p: 0, bgcolor: '#fff', flexGrow: 1,
 };
 const itemSx = {
-  py: 0.25, px: 1,
+  py: 0.3, px: 1,
   '&.Mui-selected': { bgcolor: '#1976d2 !important', color: '#fff' },
   '&.Mui-selected:hover': { bgcolor: '#1565c0 !important' },
 };
 
-const infoBox = (label: string, value: string, wide = false) => (
+// 患者情報ラベル
+const InfoCell = ({ label, value, minW = 80 }: { label: string; value: string; minW?: number }) => (
   <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-    <Typography sx={{ fontSize: '0.75rem', fontWeight: 'bold', minWidth: wide ? 60 : 48, color: '#444' }}>
+    <Typography sx={{ fontSize: '0.72rem', fontWeight: 'bold', color: '#444', whiteSpace: 'nowrap' }}>
       {label}
     </Typography>
     <Typography sx={{
-      fontSize: '0.75rem', bgcolor: '#fff', border: '1px solid #ccc',
-      px: 0.75, py: 0.1, minWidth: wide ? 140 : 90, borderRadius: 0.5,
+      fontSize: '0.72rem', bgcolor: '#fff', border: '1px solid #ccc',
+      px: 0.75, py: 0.1, minWidth: minW, borderRadius: 0.5, whiteSpace: 'nowrap',
     }}>
       {value || '　'}
     </Typography>
   </Box>
 );
+
+// 枠で囲んだセクション
+const SectionBox = ({ label, children, sx }: { label: string; children: React.ReactNode; sx?: object }) => (
+  <Box sx={{
+    border: '1.5px solid #999', borderRadius: 1,
+    px: 1, pt: 0.5, pb: 0.75,
+    display: 'flex', flexDirection: 'column',
+    ...sx,
+  }}>
+    <Typography sx={{ fontSize: '0.72rem', fontWeight: 'bold', color: '#333', mb: 0.25, lineHeight: 1 }}>
+      {label}
+    </Typography>
+    {children}
+  </Box>
+);
+
+const radioSx = { py: 0.1, '& .MuiSvgIcon-root': { fontSize: 16 } };
+const labelSx = { fontSize: '0.75rem' };
 
 // ──────────────────────────────────────────────────────────────
 export default function InterventionModal({ open, treatment, onClose, onSaved }: Props) {
@@ -114,7 +134,6 @@ export default function InterventionModal({ open, treatment, onClose, onSaved }:
   const [form, setForm]         = useState(EMPTY_FORM);
   const [recordId, setRecordId] = useState('');
   const [saving, setSaving]     = useState(false);
-  // 薬剤師リスト（APIから取得）
   const [pharmacists, setPharmacists] = useState<string[]>([]);
 
   useEffect(() => {
@@ -135,7 +154,6 @@ export default function InterventionModal({ open, treatment, onClose, onSaved }:
   const handleCategorySelect = (cat: string) => {
     setForm(f => ({ ...f, intervention_category: cat, intervention_detail: '' }));
   };
-
   const currentDetails = DETAIL_MAP[form.intervention_category] || [];
 
   const handleSave = async () => {
@@ -162,13 +180,14 @@ export default function InterventionModal({ open, treatment, onClose, onSaved }:
   return (
     <Dialog open={open} onClose={onClose} maxWidth={false} fullWidth
       PaperProps={{ sx: {
-        width: '85vw', maxWidth: '85vw',
-        maxHeight: '92vh',
-        bgcolor: '#f5f5f5',
+        width: '88vw', maxWidth: '88vw',
+        height: '90vh', maxHeight: '90vh',
+        bgcolor: '#f0f4f8',
+        display: 'flex', flexDirection: 'column',
       } }}>
 
       {/* タイトルバー */}
-      <DialogTitle sx={{ py: 0.75, px: 2, bgcolor: '#dce8f5', borderBottom: '1px solid #aaa' }}>
+      <DialogTitle sx={{ py: 0.75, px: 2, bgcolor: '#dce8f5', borderBottom: '1px solid #aaa', flexShrink: 0 }}>
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <Typography fontWeight="bold" sx={{ fontSize: '0.95rem' }}>
             外来化学療法センター疑義照会・提案入力
@@ -177,80 +196,91 @@ export default function InterventionModal({ open, treatment, onClose, onSaved }:
         </Box>
       </DialogTitle>
 
-      <DialogContent sx={{ p: 1.25 }}>
+      <DialogContent sx={{
+        p: 1.25, flexGrow: 1, overflow: 'hidden',
+        display: 'flex', flexDirection: 'column', gap: 0.75,
+      }}>
 
-        {/* 患者情報 - コンパクトに1行 */}
-        <Box sx={{ display: 'flex', gap: 1.5, flexWrap: 'wrap', mb: 0.75, alignItems: 'center' }}>
-          {infoBox('患者ID', treatment.patient_no)}
-          {infoBox('患者氏名', treatment.patient_name, true)}
-          {infoBox('診療科', treatment.department)}
-          {infoBox('医師', treatment.doctor)}
-          {infoBox('疾患名', treatment.diagnosis, true)}
-          {infoBox('レジメン', treatment.regimen_name, true)}
+        {/* ── 患者情報 ──────────────────────────────────────── */}
+        <Box sx={{
+          display: 'flex', gap: 1, flexWrap: 'wrap', alignItems: 'center',
+          bgcolor: '#f5f5f5', border: '1px solid #ddd', borderRadius: 1,
+          px: 1.25, py: 0.6,
+        }}>
+          <InfoCell label="患者ID"   value={treatment.patient_no} minW={70} />
+          <InfoCell label="患者氏名" value={treatment.patient_name} minW={110} />
+          <InfoCell label="診療科"   value={treatment.department} minW={70} />
+          <InfoCell label="医師"     value={treatment.doctor} minW={70} />
+          <InfoCell label="疾患名"   value={treatment.diagnosis} minW={120} />
+          <InfoCell label="レジメン" value={treatment.regimen_name} minW={120} />
         </Box>
 
-        <Divider sx={{ mb: 0.75 }} />
+        {/* ── 4つの枠セクション ─────────────────────────────── */}
+        <Box sx={{ display: 'flex', gap: 1, alignItems: 'stretch', flexShrink: 0 }}>
 
-        {/* 注射/内服 + 介入種別 + 前後 + 算定 - 1行にまとめる */}
-        <Box sx={{ display: 'flex', gap: 2, mb: 0.75, flexWrap: 'wrap', alignItems: 'center' }}>
-          {/* 注射/内服ラジオ（介入種別の左） */}
-          <FormControl size="small">
-            <FormLabel sx={{ fontSize: '0.75rem', fontWeight: 'bold', color: '#333' }}>注射/内服</FormLabel>
+          {/* 注射/内服 */}
+          <SectionBox label="注射/内服">
             <RadioGroup row value={form.drug_route}
               onChange={e => set('drug_route', e.target.value as '注射' | '内服')}>
               {(['注射', '内服'] as const).map(v => (
                 <FormControlLabel key={v} value={v}
-                  control={<Radio size="small" sx={{ py: 0.1 }} />}
-                  label={<Typography sx={{ fontSize: '0.75rem' }}>{v}</Typography>} />
+                  control={<Radio size="small" sx={radioSx} />}
+                  label={<Typography sx={labelSx}>{v}</Typography>}
+                  sx={{ mr: 0.5 }} />
               ))}
             </RadioGroup>
-          </FormControl>
-          <FormControl size="small">
-            <FormLabel sx={{ fontSize: '0.75rem', fontWeight: 'bold', color: '#333' }}>介入種別</FormLabel>
+          </SectionBox>
+
+          {/* 介入種別 */}
+          <SectionBox label="介入種別">
             <RadioGroup row value={form.intervention_type}
-              onChange={e => set('intervention_type', e.target.value as any)}>
+              onChange={e => set('intervention_type', e.target.value as string)}>
               {(['提案', '疑義', '問い合わせ'] as const).map(v => (
                 <FormControlLabel key={v} value={v}
-                  control={<Radio size="small" sx={{ py: 0.1 }} />}
-                  label={<Typography sx={{ fontSize: '0.75rem' }}>{v}</Typography>} />
+                  control={<Radio size="small" sx={radioSx} />}
+                  label={<Typography sx={labelSx}>{v}</Typography>}
+                  sx={{ mr: 0.5 }} />
               ))}
             </RadioGroup>
-          </FormControl>
+          </SectionBox>
 
-          <FormControl size="small">
-            <FormLabel sx={{ fontSize: '0.75rem', fontWeight: 'bold', color: '#333' }}>診察前・後</FormLabel>
+          {/* 診察前・後 */}
+          <SectionBox label="診察前・後">
             <RadioGroup row value={form.consultation_timing}
-              onChange={e => set('consultation_timing', e.target.value as any)}>
+              onChange={e => set('consultation_timing', e.target.value as string)}>
               {(['前', '後'] as const).map(v => (
                 <FormControlLabel key={v} value={v}
-                  control={<Radio size="small" sx={{ py: 0.1 }} />}
-                  label={<Typography sx={{ fontSize: '0.75rem' }}>{v}</Typography>} />
+                  control={<Radio size="small" sx={radioSx} />}
+                  label={<Typography sx={labelSx}>{v}</Typography>}
+                  sx={{ mr: 0.5 }} />
               ))}
             </RadioGroup>
-          </FormControl>
+          </SectionBox>
 
-          <Box>
-            <Typography sx={{ fontSize: '0.75rem', fontWeight: 'bold', color: '#333', mb: 0.25 }}>算定</Typography>
+          {/* 算定 */}
+          <SectionBox label="算定" sx={{ flexGrow: 1 }}>
             <FormGroup row>
               <FormControlLabel
                 control={<Checkbox size="small" checked={form.calc_cancer_guidance}
-                  onChange={e => set('calc_cancer_guidance', e.target.checked)} />}
-                label={<Typography sx={{ fontSize: '0.75rem' }}>がん患者指導料ハ</Typography>} />
+                  onChange={e => set('calc_cancer_guidance', e.target.checked)}
+                  sx={{ py: 0.1, '& .MuiSvgIcon-root': { fontSize: 16 } }} />}
+                label={<Typography sx={labelSx}>がん患者指導料ハ</Typography>}
+                sx={{ mr: 1 }} />
               <FormControlLabel
                 control={<Checkbox size="small" checked={form.calc_pre_consultation}
-                  onChange={e => set('calc_pre_consultation', e.target.checked)} />}
-                label={<Typography sx={{ fontSize: '0.75rem' }}>がん薬物療法体制充実加算</Typography>} />
+                  onChange={e => set('calc_pre_consultation', e.target.checked)}
+                  sx={{ py: 0.1, '& .MuiSvgIcon-root': { fontSize: 16 } }} />}
+                label={<Typography sx={labelSx}>がん薬物療法体制充実加算</Typography>} />
             </FormGroup>
-          </Box>
+          </SectionBox>
+
         </Box>
 
-        <Divider sx={{ mb: 0.75 }} />
-
-        {/* メインエリア: 分類(2) 詳細(1.5) 内容(7) 薬剤師+チェック(1.5) = 12 */}
-        <Grid container spacing={1}>
+        {/* ── メインエリア ──────────────────────────────────── */}
+        <Box sx={{ display: 'flex', gap: 1, flexGrow: 1, minHeight: 0 }}>
 
           {/* 介入分類 */}
-          <Grid item xs={2}>
+          <Box sx={{ width: 110, flexShrink: 0, display: 'flex', flexDirection: 'column' }}>
             <Typography sx={{ fontSize: '0.75rem', fontWeight: 'bold', mb: 0.25 }}>介入分類</Typography>
             <List sx={listBoxSx}>
               {INTERVENTION_CATEGORIES.map(cat => (
@@ -262,10 +292,10 @@ export default function InterventionModal({ open, treatment, onClose, onSaved }:
                 </ListItemButton>
               ))}
             </List>
-          </Grid>
+          </Box>
 
           {/* 介入詳細 */}
-          <Grid item xs={2}>
+          <Box sx={{ width: 140, flexShrink: 0, display: 'flex', flexDirection: 'column' }}>
             <Typography sx={{ fontSize: '0.75rem', fontWeight: 'bold', mb: 0.25 }}>介入詳細</Typography>
             <List sx={listBoxSx}>
               {currentDetails.length > 0 ? (
@@ -283,24 +313,30 @@ export default function InterventionModal({ open, treatment, onClose, onSaved }:
                 </Box>
               )}
             </List>
-          </Grid>
+          </Box>
 
-          {/* 介入内容（広め） */}
-          <Grid item xs={7}>
+          {/* 介入内容 */}
+          <Box sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column' }}>
             <Typography sx={{ fontSize: '0.75rem', fontWeight: 'bold', mb: 0.25 }}>
               介入内容（状況・提案結果）
             </Typography>
-            <TextField multiline rows={9} fullWidth
+            <TextField
+              multiline fullWidth
               value={form.intervention_content}
               onChange={e => set('intervention_content', e.target.value)}
-              size="small" sx={{ bgcolor: '#fff' }}
-              inputProps={{ style: { fontSize: '0.82rem' } }} />
-          </Grid>
+              size="small"
+              sx={{ flexGrow: 1, bgcolor: '#fff',
+                '& .MuiInputBase-root': { height: '100%', alignItems: 'flex-start' },
+                '& textarea': { height: '100% !important', resize: 'none' },
+              }}
+              inputProps={{ style: { fontSize: '0.82rem' } }}
+            />
+          </Box>
 
-          {/* 薬剤師 */}
-          <Grid item xs={1} sx={{ minWidth: 72 }}>
+          {/* 薬剤師 + チェックボックス群 */}
+          <Box sx={{ width: 120, flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 0.5 }}>
             <Typography sx={{ fontSize: '0.75rem', fontWeight: 'bold', mb: 0.25 }}>薬剤師</Typography>
-            <List sx={{ ...listBoxSx, height: 380 }}>
+            <List sx={{ ...listBoxSx, flexGrow: 1 }}>
               {pharmacists.map(ph => (
                 <ListItemButton key={ph}
                   selected={form.pharmacist_name === ph}
@@ -310,38 +346,48 @@ export default function InterventionModal({ open, treatment, onClose, onSaved }:
                 </ListItemButton>
               ))}
             </List>
-          </Grid>
-        </Grid>
 
+            {/* チェックボックス - 薬剤師リスト下 */}
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.25, flexShrink: 0 }}>
+              {([
+                ['prescription_changed', '処方変更あり'] as const,
+                ['proxy_prescription',   '代行処方']    as const,
+                ['case_candidate',       '症例候補']    as const,
+              ]).map(([key, label]) => (
+                <FormControlLabel key={key}
+                  control={
+                    <Checkbox size="small"
+                      checked={form[key] as boolean}
+                      onChange={e => set(key, e.target.checked)}
+                      sx={{ py: 0.1, '& .MuiSvgIcon-root': { fontSize: 16 } }} />
+                  }
+                  label={<Typography sx={{ fontSize: '0.72rem' }}>{label}</Typography>}
+                  sx={{ mx: 0, ml: -0.5 }}
+                />
+              ))}
+            </Box>
+          </Box>
+
+        </Box>
       </DialogContent>
 
-      <DialogActions sx={{ px: 2, py: 0.75, borderTop: '1px solid #ccc', flexDirection: 'column', alignItems: 'stretch', gap: 0.5 }}>
-        {/* チェックボックス行 */}
-        <Box sx={{ display: 'flex', gap: 0.5, alignItems: 'center' }}>
-          <FormControlLabel
-            control={<Checkbox size="small" checked={form.prescription_changed}
-              onChange={e => set('prescription_changed', e.target.checked)} sx={{ py: 0.1 }} />}
-            label={<Typography sx={{ fontSize: '0.72rem' }}>処方変更あり</Typography>} />
-          <FormControlLabel
-            control={<Checkbox size="small" checked={form.proxy_prescription}
-              onChange={e => set('proxy_prescription', e.target.checked)} sx={{ py: 0.1 }} />}
-            label={<Typography sx={{ fontSize: '0.72rem' }}>代行処方</Typography>} />
-          <FormControlLabel
-            control={<Checkbox size="small" checked={form.case_candidate}
-              onChange={e => set('case_candidate', e.target.checked)} sx={{ py: 0.1 }} />}
-            label={<Typography sx={{ fontSize: '0.72rem' }}>症例候補</Typography>} />
-        </Box>
-        {/* 記録ID＋ボタン行 */}
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-          <Typography sx={{ fontSize: '0.65rem', color: '#555', mr: 'auto', wordBreak: 'break-all' }}>
-            記録ID: {recordId}
-          </Typography>
-          <Button onClick={onClose} variant="outlined" size="small">とじる</Button>
-          <Button onClick={handleSave} variant="contained" size="small" disabled={saving}>
-            {saving ? '保存中...' : '記録'}
-          </Button>
-        </Box>
+      {/* ── フッター ───────────────────────────────────────── */}
+      <DialogActions sx={{
+        px: 2, py: 0.75,
+        borderTop: '1px solid #ccc',
+        display: 'flex', alignItems: 'center',
+        flexShrink: 0,
+      }}>
+        <Typography sx={{ fontSize: '0.65rem', color: '#555', mr: 'auto', wordBreak: 'break-all' }}>
+          記録ID: {recordId}
+        </Typography>
+        <Button onClick={onClose} variant="outlined" size="small">とじる</Button>
+        <Button onClick={handleSave} variant="contained" size="small" disabled={saving}
+          sx={{ ml: 1 }}>
+          {saving ? '保存中...' : '記録'}
+        </Button>
       </DialogActions>
+
     </Dialog>
   );
 }

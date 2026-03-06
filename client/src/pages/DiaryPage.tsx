@@ -279,7 +279,7 @@ export default function DiaryPage() {
             <Table size="small" sx={{ borderCollapse: 'collapse' }}>
               <TableHead>
                 <TableRow>
-                  <TH w={64}>氏名</TH><TH w={52}>開始</TH><TH w={52}>終了</TH><TH w={28}>昼</TH><TH w={44}>昼休(分)</TH><TH w={44}>実働</TH>
+                  <TH w={64}>氏名</TH><TH w={104}>開始</TH><TH w={104}>終了</TH><TH w={28}>昼</TH><TH w={44}>昼休(分)</TH><TH w={44}>実働</TH>
                   <TableCell className="no-print" sx={{ p: 0, border: 0, width: 28 }} />
                 </TableRow>
               </TableHead>
@@ -298,16 +298,16 @@ export default function DiaryPage() {
                           {pharmacistNames.map(n => <option key={n} value={n}>{n}</option>)}
                         </TextField>
                       </TD>
-                      <TD>
+                      <TD center>
                         <TextField type="time" size="small" value={ph.start_time}
                           onChange={e => setPh(i, 'start_time', e.target.value)}
-                          inputProps={{ style: { fontSize: '0.75rem', padding: '1px 2px', width: 52 } }}
+                          inputProps={{ style: { fontSize: '0.78rem', padding: '1px 4px', width: 90 } }}
                           sx={{ '& .MuiOutlinedInput-root': { height: 24 } }} />
                       </TD>
-                      <TD>
+                      <TD center>
                         <TextField type="time" size="small" value={ph.end_time}
                           onChange={e => setPh(i, 'end_time', e.target.value)}
-                          inputProps={{ style: { fontSize: '0.75rem', padding: '1px 2px', width: 52 } }}
+                          inputProps={{ style: { fontSize: '0.78rem', padding: '1px 4px', width: 90 } }}
                           sx={{ '& .MuiOutlinedInput-root': { height: 24 } }} />
                       </TD>
                       <TD center>

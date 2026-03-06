@@ -20,7 +20,7 @@ export { DRAWER_WIDTH };
 const NAV_ITEMS = [
   { label: '当日患者一覧',   path: '/',                     icon: <CalendarToday fontSize="small" /> },
   { label: 'レジメン監査',   path: '/regimen',               icon: <Assignment fontSize="small" />,   disabled: true },
-  { label: '点滴説明',       path: '/guidance',              icon: <MenuBook fontSize="small" /> },
+  { label: '点滴説明書',      path: '/guidance',              icon: <MenuBook fontSize="small" /> },
   { label: '業務日誌作成',   path: '/diary',                 icon: <Book fontSize="small" /> },
   { label: '業務日誌一覧',   path: '/diary-list',            icon: <LibraryBooks fontSize="small" /> },
   { label: '実施一覧',       path: '/snapshot-list',         icon: <TableChart fontSize="small" /> },

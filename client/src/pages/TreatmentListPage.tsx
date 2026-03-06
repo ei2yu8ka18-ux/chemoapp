@@ -529,12 +529,12 @@ export default function TreatmentListPage() {
                             </Typography>
                             <PrescChips value={t.prescription_type} />
                             {t.status !== 'pending' && (
-                              <Box sx={{ mt: 0.25, display: 'flex', flexWrap: 'wrap', gap: 0.25, alignItems: 'center' }}>
-                                <Typography sx={{ fontSize: '0.68rem', fontWeight: 'bold', color: STATUS_COLOR[t.status], lineHeight: 1.4 }}>
+                              <Box sx={{ mt: 0.5, display: 'flex', flexDirection: 'column', gap: 0.25 }}>
+                                <Typography sx={{ fontSize: '0.75rem', fontWeight: 'bold', color: STATUS_COLOR[t.status], lineHeight: 1.4 }}>
                                   【{STATUS_LABEL[t.status]} {fmtTime(t.status_changed_at)}】
                                 </Typography>
                                 {t.status === 'done' && t.scheduled_time && (
-                                  <Typography sx={{ fontSize: '0.62rem', color: '#555', lineHeight: 1.4 }}>
+                                  <Typography sx={{ fontSize: '0.72rem', color: '#333', lineHeight: 1.4 }}>
                                     【開始 {t.scheduled_time.substring(0, 5)}～】
                                   </Typography>
                                 )}
