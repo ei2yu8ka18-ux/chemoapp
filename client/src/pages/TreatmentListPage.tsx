@@ -126,6 +126,12 @@ function fmtTime(iso: string | null): string {
   return `${dt.getHours().toString().padStart(2,'0')}:${dt.getMinutes().toString().padStart(2,'0')}`;
 }
 
+/** 採血数値フォーマット: 整数→そのまま / 小数→小数点以下2桁 */
+function fmtBlood(v: number): string {
+  if (v === Math.floor(v)) return v.toString();
+  return v.toFixed(2);
+}
+
 const todayStr = new Date().toISOString().split('T')[0];
 const cellSx = { border: '1px solid #ddd', py: 0.25, px: 0.5, fontSize: '0.875rem' };
 
@@ -523,11 +529,11 @@ export default function TreatmentListPage() {
                             </Typography>
                             <PrescChips value={t.prescription_type} />
                             {t.status !== 'pending' && (
-                              <Box sx={{ mt: 0.25 }}>
+                              <Box sx={{ mt: 0.25, display: 'flex', flexWrap: 'wrap', gap: 0.25, alignItems: 'center' }}>
                                 <Typography sx={{ fontSize: '0.68rem', fontWeight: 'bold', color: STATUS_COLOR[t.status], lineHeight: 1.4 }}>
                                   【{STATUS_LABEL[t.status]} {fmtTime(t.status_changed_at)}】
                                 </Typography>
-                                {t.scheduled_time && (
+                                {t.status === 'done' && t.scheduled_time && (
                                   <Typography sx={{ fontSize: '0.62rem', color: '#555', lineHeight: 1.4 }}>
                                     【開始 {t.scheduled_time.substring(0, 5)}～】
                                   </Typography>
@@ -605,23 +611,20 @@ export default function TreatmentListPage() {
                             <TableCell key={f.key} sx={{
                               border: '1px solid #ddd',
                               borderBottom: bloodBorder,
-                              p: '1px 2px',
+                              p: '1px 3px',
                               bgcolor: grade > 0 ? GRADE_BG[grade] : bg,
-                              width: 58, minWidth: 58, maxWidth: 58,
+                              width: 50, minWidth: 50, maxWidth: 50,
                               verticalAlign: 'middle',
-                              textAlign: 'center',
                             }}>
-                              <Typography sx={{ fontSize: '0.56rem', color: '#888', lineHeight: 1, display: 'block' }}>
-                                {f.label}
-                              </Typography>
                               <Typography sx={{
-                                fontSize: '0.65rem',
+                                fontSize: '0.6rem',
                                 fontWeight: grade > 0 ? 'bold' : 'normal',
-                                color: grade > 0 ? '#333' : '#555',
-                                lineHeight: 1.2,
-                                display: 'block',
+                                whiteSpace: 'nowrap',
                               }}>
-                                {numVal != null ? numVal : '-'}
+                                <span style={{ color: '#888' }}>{f.label}: </span>
+                                <span style={{ color: grade > 0 ? '#333' : '#555' }}>
+                                  {numVal != null ? fmtBlood(numVal) : '-'}
+                                </span>
                               </Typography>
                             </TableCell>
                           );
