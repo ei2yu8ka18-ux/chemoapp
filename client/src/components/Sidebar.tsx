@@ -6,7 +6,7 @@ import {
 import {
   CalendarToday, Assignment, MenuBook, Book,
   History, BarChart, TrendingUp, ManageAccounts, LibraryBooks,
-  Summarize, Lock,
+  Summarize, Lock, TableChart, Settings, Login,
 } from '@mui/icons-material';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -18,6 +18,7 @@ const NAV_ITEMS = [
   { label: '点滴説明',       path: '/guidance',              icon: <MenuBook fontSize="small" />,     disabled: true },
   { label: '業務日誌',       path: '/diary',                 icon: <Book fontSize="small" /> },
   { label: '業務日誌一覧',   path: '/diary-list',            icon: <LibraryBooks fontSize="small" /> },
+  { label: '実施一覧表',     path: '/snapshot-list',         icon: <TableChart fontSize="small" /> },
   { label: '指導歴',         path: '/history',               icon: <History fontSize="small" /> },
   { label: '月報',           path: '/monthly',               icon: <BarChart fontSize="small" /> },
   { label: '介入報告書',     path: '/intervention-report',   icon: <Summarize fontSize="small" /> },
@@ -25,7 +26,9 @@ const NAV_ITEMS = [
 ];
 
 const ADMIN_ITEMS = [
-  { label: 'ユーザー管理', path: '/admin/users', icon: <ManageAccounts fontSize="small" /> },
+  { label: 'ユーザー管理',     path: '/admin/users',                icon: <ManageAccounts fontSize="small" /> },
+  { label: '診察前面談設定',   path: '/admin/pre-consult-settings', icon: <Settings fontSize="small" /> },
+  { label: 'ログイン記録',     path: '/admin/auth-logs',            icon: <Login fontSize="small" /> },
 ];
 
 export default function Sidebar() {

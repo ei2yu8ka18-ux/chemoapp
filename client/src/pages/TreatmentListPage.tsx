@@ -4,9 +4,9 @@ import {
   TableBody, Button, TextField, Chip, AppBar,
   Toolbar, CircularProgress, Paper, Dialog, DialogTitle,
   DialogContent, DialogActions, IconButton, FormControlLabel,
-  Checkbox, FormGroup, Select, MenuItem,
+  Checkbox, FormGroup, Snackbar, Alert,
 } from '@mui/material';
-import { Book, Add, Remove } from '@mui/icons-material';
+import { Book, Add, Remove, Save } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import api from '../services/api';
@@ -114,10 +114,11 @@ function getSurname(furigana: string | null): string {
   return furigana.trim().split(/[\s　]+/)[0] || '';
 }
 
-const today = new Date().toISOString().split('T')[0];
-const weekdays = ['日','月','火','水','木','金','土'];
-const d = new Date();
-const dateLabel = `${d.getFullYear()}年${d.getMonth()+1}月${d.getDate()}日（${weekdays[d.getDay()]}）`;
+function formatDateLabel(dateStr: string): string {
+  const weekdays = ['日','月','火','水','木','金','土'];
+  const d = new Date(dateStr + 'T00:00:00');
+  return `${d.getFullYear()}年${d.getMonth()+1}月${d.getDate()}日（${weekdays[d.getDay()]}）`;
+}
 
 function fmtTime(iso: string | null): string {
   if (!iso) return '';
@@ -125,6 +126,7 @@ function fmtTime(iso: string | null): string {
   return `${dt.getHours().toString().padStart(2,'0')}:${dt.getMinutes().toString().padStart(2,'0')}`;
 }
 
+const todayStr = new Date().toISOString().split('T')[0];
 const cellSx = { border: '1px solid #ddd', py: 0.25, px: 0.5, fontSize: '0.875rem' };
 
 // 変更/中止の頻出理由
@@ -137,13 +139,14 @@ export default function TreatmentListPage() {
   const [treatments, setTreatments] = useState<Treatment[]>([]);
   const [loading, setLoading]       = useState(true);
   const [regimenOpCount, setRegimenOpCount] = useState(0);
+  const [selectedDate, setSelectedDate] = useState(todayStr);
+
+  // 診察前面談対象診療科
+  const [preConsultDepts, setPreConsultDepts] = useState<string[]>(['腫瘍内', '内科']);
 
   // 採血自動取込
   const [autoBlood1, setAutoBlood1] = useState(false);
   const [autoBlood5, setAutoBlood5] = useState(false);
-
-  // 対象診療科フィルター
-  const [deptFilter, setDeptFilter] = useState('全科');
 
   // 変更/中止ダイアログ
   const [dialog, setDialog] = useState<{
@@ -158,12 +161,18 @@ export default function TreatmentListPage() {
   // 介入記録モーダル
   const [interventionTarget, setInterventionTarget] = useState<Treatment | null>(null);
 
-  const load = useCallback(async () => {
+  // 保存状態
+  const [snackbar, setSnackbar] = useState<{ open: boolean; msg: string; severity: 'success' | 'error' }>({
+    open: false, msg: '', severity: 'success',
+  });
+  const [saving, setSaving] = useState(false);
+
+  const load = useCallback(async (date: string) => {
     setLoading(true);
     try {
       const [treatRes, diaryRes] = await Promise.all([
-        api.get<Treatment[]>('/treatments', { params: { date: today } }),
-        api.get(`/workdiaries/${today}`).catch(() => null),
+        api.get<Treatment[]>('/treatments', { params: { date } }),
+        api.get(`/workdiaries/${date}`).catch(() => null),
       ]);
       setTreatments(treatRes.data);
       if (diaryRes?.data?.diary) {
@@ -174,15 +183,27 @@ export default function TreatmentListPage() {
     }
   }, []);
 
-  useEffect(() => { load(); }, [load]);
+  // 初回: 設定 + データ読み込み
+  useEffect(() => {
+    api.get('/settings/pre-consult-departments')
+      .then(res => {
+        const enabled = (res.data.departments as { department_name: string; is_enabled: boolean }[])
+          .filter(d => d.is_enabled)
+          .map(d => d.department_name);
+        setPreConsultDepts(enabled);
+      })
+      .catch(() => {});
+    load(todayStr);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // 採血自動取込タイマー
   useEffect(() => {
     if (!autoBlood1 && !autoBlood5) return;
     const intervalMs = autoBlood1 ? 60_000 : 300_000;
-    const timer = setInterval(() => { load(); }, intervalMs);
+    const timer = setInterval(() => { load(selectedDate); }, intervalMs);
     return () => clearInterval(timer);
-  }, [autoBlood1, autoBlood5, load]);
+  }, [autoBlood1, autoBlood5, load, selectedDate]);
 
   // 同姓チェック
   const duplicateSurnames = useMemo(() => {
@@ -193,18 +214,6 @@ export default function TreatmentListPage() {
     });
     return new Set(Object.keys(counts).filter(k => counts[k] > 1));
   }, [treatments]);
-
-  // 診療科一覧（フィルター用）
-  const departments = useMemo(() => {
-    const depts = [...new Set(treatments.map(t => t.department).filter(Boolean))].sort();
-    return ['全科', ...depts];
-  }, [treatments]);
-
-  // フィルター済み患者一覧
-  const filteredTreatments = useMemo(() => {
-    if (deptFilter === '全科') return treatments;
-    return treatments.filter(t => t.department === deptFilter);
-  }, [treatments, deptFilter]);
 
   const applyStatus = async (id: number, status: TreatmentStatus, note?: string) => {
     const res = await api.patch(`/treatments/${id}/status`, { status, note: note || null });
@@ -240,7 +249,7 @@ export default function TreatmentListPage() {
   const handleRegimenOp = async (delta: number) => {
     if (delta < 0 && regimenOpCount <= 0) return;
     try {
-      const res = await api.patch(`/workdiaries/${today}/increment`, {
+      const res = await api.patch(`/workdiaries/${selectedDate}/increment`, {
         field: 'regimen_operation', delta,
       });
       setRegimenOpCount(res.data.new_value);
@@ -259,10 +268,32 @@ export default function TreatmentListPage() {
     setMemoDialog(null);
   };
 
-  const doneCount    = filteredTreatments.filter(t => t.status === 'done').length;
-  const cancelCount  = filteredTreatments.filter(t => t.status === 'cancelled').length;
-  const changedCount = filteredTreatments.filter(t => t.status === 'changed').length;
-  const remaining    = filteredTreatments.length - doneCount - cancelCount - changedCount;
+  // 一覧保存
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      await api.post('/daily-snapshots', {
+        snapshot_date: selectedDate,
+        snapshot_data: {
+          treatments,
+          dateLabel: formatDateLabel(selectedDate),
+          savedAt: new Date().toISOString(),
+        },
+        total_patients: treatments.length,
+      });
+      setSnackbar({ open: true, msg: '一覧を保存しました', severity: 'success' });
+    } catch {
+      setSnackbar({ open: true, msg: '保存に失敗しました', severity: 'error' });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const dateLabel = formatDateLabel(selectedDate);
+  const doneCount    = treatments.filter(t => t.status === 'done').length;
+  const cancelCount  = treatments.filter(t => t.status === 'cancelled').length;
+  const changedCount = treatments.filter(t => t.status === 'changed').length;
+  const remaining    = treatments.length - doneCount - cancelCount - changedCount;
 
   const btnSx = {
     fontSize: '0.68rem', py: 0.25, px: 0.75,
@@ -277,18 +308,26 @@ export default function TreatmentListPage() {
       {/* ── ヘッダー ── */}
       <AppBar position="static" className="no-print" sx={{ bgcolor: '#1a5276' }}>
         <Toolbar sx={{ gap: 0.75, minHeight: 44, flexWrap: 'wrap' }}>
-          {/* 2行タイトル */}
-          <Box sx={{ lineHeight: 1.2, mr: 0.5 }}>
-            <Typography sx={{ fontSize: '0.78rem', fontWeight: 'bold', color: '#fff', lineHeight: 1.2 }}>
-              京都桂病院
-            </Typography>
-            <Typography sx={{ fontSize: '0.68rem', color: '#d6eaf8', lineHeight: 1.2 }}>
-              外来化学療法センター薬剤師業務
-            </Typography>
-          </Box>
+          {/* 日付ピッカー */}
+          <input
+            type="date"
+            value={selectedDate}
+            onChange={e => setSelectedDate(e.target.value)}
+            style={{
+              background: 'rgba(255,255,255,0.15)',
+              border: '1px solid rgba(255,255,255,0.4)',
+              borderRadius: 4,
+              color: '#fff',
+              fontSize: '0.82rem',
+              padding: '2px 6px',
+              height: 26,
+              colorScheme: 'dark',
+            }}
+          />
           <Typography fontWeight="bold" sx={{ fontSize: '0.95rem', letterSpacing: 0.5 }}>
             {dateLabel}
           </Typography>
+
           {/* あと〇件(赤) / 全〇件(白) */}
           <Box sx={{
             display: 'flex', alignItems: 'center',
@@ -298,28 +337,28 @@ export default function TreatmentListPage() {
               あと {remaining}件
             </Typography>
             <Typography component="span" sx={{ fontSize: '0.78rem', color: '#ecf0f1' }}>
-              &nbsp;/&nbsp;全 {filteredTreatments.length}件
+              &nbsp;/&nbsp;全 {treatments.length}件
             </Typography>
           </Box>
           <Typography variant="body2" sx={{ fontSize: '0.65rem', color: '#d6eaf8' }}>
             （実施 {doneCount}・中止 {cancelCount}・変更 {changedCount}）
           </Typography>
 
-          {/* 診療科フィルター */}
-          <Select size="small" value={deptFilter}
-            onChange={e => setDeptFilter(e.target.value)}
-            sx={{ bgcolor: '#fff', height: 26, fontSize: '0.72rem', minWidth: 80 }}>
-            {departments.map(dep => (
-              <MenuItem key={dep} value={dep} sx={{ fontSize: '0.78rem' }}>{dep}</MenuItem>
-            ))}
-          </Select>
-
           <Box sx={{ flexGrow: 1 }} />
 
-          {/* 操作ボタン群 */}
+          {/* 一覧作成ボタン */}
           <Button size="small" color="inherit" variant="outlined"
-            onClick={() => alert('一覧作成機能は電子カルテ連携後に実装予定です')}
+            onClick={() => load(selectedDate)}
             sx={btnSx}>一覧作成</Button>
+
+          {/* 保存ボタン */}
+          <Button size="small" color="inherit" variant="outlined"
+            onClick={handleSave}
+            disabled={saving || treatments.length === 0}
+            startIcon={<Save sx={{ fontSize: '0.8rem' }} />}
+            sx={btnSx}>
+            {saving ? '保存中...' : '保存'}
+          </Button>
 
           {/* レジメン操作 ± */}
           <Box sx={{ display: 'flex', alignItems: 'center', border: '1px solid rgba(255,255,255,0.4)',
@@ -347,7 +386,7 @@ export default function TreatmentListPage() {
           {/* 採血情報 + 1分/5分 */}
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.25,
             border: '1px solid rgba(255,255,255,0.4)', borderRadius: 0.5, px: 0.5, py: 0.2 }}>
-            <Button size="small" color="inherit" onClick={() => load()}
+            <Button size="small" color="inherit" onClick={() => load(selectedDate)}
               sx={{ fontSize: '0.68rem', py: 0, px: 0.5, minWidth: 0, color: '#fff' }}>採血情報</Button>
             <FormControlLabel
               control={
@@ -392,27 +431,20 @@ export default function TreatmentListPage() {
             <Table size="small" sx={{ borderCollapse: 'collapse', minWidth: 1050 }}>
               <TableHead>
                 <TableRow sx={{ bgcolor: '#27ae60' }}>
-                  {/* 予定時間 */}
                   <TableCell sx={{ ...cellSx, color: '#fff', fontWeight: 'bold', width: 40, textAlign: 'center', fontSize: '0.72rem' }}>
                     予定時間
                   </TableCell>
-                  {/* 診療科/医師 - 幅を小さく */}
                   <TableCell sx={{ ...cellSx, color: '#fff', fontWeight: 'bold', width: 48, fontSize: '0.68rem' }}>
                     診療科<br/>医師
                   </TableCell>
-                  {/* 実施予定患者 */}
                   <TableCell sx={{ ...cellSx, color: '#fff', fontWeight: 'bold', width: 108 }}>実施予定患者</TableCell>
-                  {/* レジメン */}
                   <TableCell sx={{ ...cellSx, color: '#fff', fontWeight: 'bold', width: 108 }}>レジメン</TableCell>
-                  {/* 前回の緊急処方情報 */}
                   <TableCell sx={{ ...cellSx, color: '#fff', fontWeight: 'bold', width: 72, fontSize: '0.68rem' }}>
                     前回の<br/>緊急処方情報
                   </TableCell>
-                  {/* 注射情報 */}
                   <TableCell sx={{ ...cellSx, color: '#fff', fontWeight: 'bold', width: 60, fontSize: '0.68rem' }}>
                     注射情報<br/>(Bis/VB12)
                   </TableCell>
-                  {/* 採血結果 */}
                   <TableCell colSpan={5} sx={{ ...cellSx, color: '#fff', fontWeight: 'bold', textAlign: 'center', fontSize: '0.68rem' }}>
                     採血情報（CTCAE v5.0）<br/>
                     <span style={{ color: '#90caf9' }}>■</span>G1&nbsp;
@@ -420,11 +452,8 @@ export default function TreatmentListPage() {
                     <span style={{ color: '#fff9c4' }}>■</span>G3&nbsp;
                     <span style={{ color: '#ffcdd2' }}>■</span>G4
                   </TableCell>
-                  {/* 実施可否 */}
                   <TableCell className="status-col" sx={{ ...cellSx, color: '#fff', fontWeight: 'bold', width: 58, textAlign: 'center' }}>実施可否</TableCell>
-                  {/* 備考 */}
                   <TableCell sx={{ ...cellSx, color: '#fff', fontWeight: 'bold', width: 100 }}>備考</TableCell>
-                  {/* Chemo実施状況 */}
                   <TableCell sx={{ ...cellSx, color: '#fff', fontWeight: 'bold', width: 72, fontSize: '0.68rem' }}>
                     Chemo<br/>実施状況
                   </TableCell>
@@ -432,12 +461,14 @@ export default function TreatmentListPage() {
               </TableHead>
 
               <TableBody>
-                {filteredTreatments.map((t) => {
+                {treatments.map((t) => {
                   const bg     = getRowBg(t);
                   const timeBg = getTimeBg(t.scheduled_time);
                   const surname = getSurname(t.furigana);
                   const isDup   = surname ? duplicateSurnames.has(surname) : false;
-                  // 診察前面談: 算定可かどうか（0件=算定可）
+                  // 診察前面談対象診療科かどうか
+                  const isPreConsultDept = preConsultDepts.includes(t.department ?? '');
+                  // 算定可かどうか（0件=算定可）
                   const canClaimPreConsult = t.pre_consultation_this_month === 0;
 
                   return BLOOD_ROWS.map((rowFields, rowIdx) => {
@@ -460,7 +491,7 @@ export default function TreatmentListPage() {
                           </TableCell>
                         )}
 
-                        {/* 診療科 / 医師 - コンパクト */}
+                        {/* 診療科 / 医師 */}
                         {rowIdx === 0 && (
                           <TableCell rowSpan={3} sx={{ ...cellSx, verticalAlign: 'top', bgcolor: bg, borderBottom: spanBorder, width: 48 }}>
                             <Typography sx={{ fontSize: '0.65rem', color: '#1565c0', lineHeight: 1.2 }}>{t.department}</Typography>
@@ -506,9 +537,12 @@ export default function TreatmentListPage() {
                           </TableCell>
                         )}
 
-                        {/* 前回の緊急処方情報 */}
+                        {/* 前回の緊急処方情報 - 診察前面談付箋オーバーレイ付き */}
                         {rowIdx === 0 && (
-                          <TableCell rowSpan={3} sx={{ ...cellSx, verticalAlign: 'top', bgcolor: bg, borderBottom: spanBorder }}>
+                          <TableCell rowSpan={3} sx={{
+                            ...cellSx, verticalAlign: 'top', bgcolor: bg, borderBottom: spanBorder,
+                            position: 'relative', overflow: 'visible',
+                          }}>
                             {t.prescription_type === '緊急' && t.prescription_info ? (
                               <Typography sx={{ fontSize: '0.65rem', whiteSpace: 'pre-wrap', color: '#b71c1c' }}>
                                 {t.prescription_info}
@@ -516,20 +550,57 @@ export default function TreatmentListPage() {
                             ) : t.prescription_type === '緊急' ? (
                               <Typography sx={{ fontSize: '0.6rem', color: '#999', fontStyle: 'italic' }}>（取込待ち）</Typography>
                             ) : null}
+
+                            {/* 診察前面談 付箋オーバーレイ（「前回の緊急処方情報」+「注射情報」の2列スパン） */}
+                            {isPreConsultDept && (
+                              <Box sx={{
+                                position: 'absolute',
+                                top: 3,
+                                left: 3,
+                                right: -63,
+                                bottom: 3,
+                                bgcolor: canClaimPreConsult
+                                  ? 'rgba(255,152,0,0.93)'
+                                  : 'rgba(135,206,250,0.90)',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                flexDirection: 'column',
+                                zIndex: 10,
+                                borderRadius: '4px',
+                                boxShadow: '0 2px 8px rgba(0,0,0,0.28)',
+                                border: `2px solid ${canClaimPreConsult ? '#e65100' : '#0288d1'}`,
+                                pointerEvents: 'none',
+                              }}>
+                                <Typography sx={{
+                                  fontSize: '0.9rem',
+                                  fontWeight: 'bold',
+                                  color: canClaimPreConsult ? '#4a1500' : '#01579b',
+                                  textAlign: 'center',
+                                  lineHeight: 1.5,
+                                  letterSpacing: '-0.01em',
+                                }}>
+                                  診察前面談<br/>
+                                  {canClaimPreConsult ? '（算定可）' : '（算定不可）'}
+                                </Typography>
+                              </Box>
+                            )}
                           </TableCell>
                         )}
 
-                        {/* 注射情報（Bis剤・VB12製剤）- スタブ */}
+                        {/* 注射情報（Bis剤・VB12製剤）*/}
                         {rowIdx === 0 && (
-                          <TableCell rowSpan={3} sx={{ ...cellSx, verticalAlign: 'top', bgcolor: bg, borderBottom: spanBorder }} />
+                          <TableCell rowSpan={3} sx={{
+                            ...cellSx, verticalAlign: 'top', bgcolor: bg, borderBottom: spanBorder,
+                            position: 'relative', zIndex: 0,
+                          }} />
                         )}
 
-                        {/* 採血結果（5列）: 項目:数値 横並び、WBCセル(rowIdx=0)に診察前面談チップ */}
+                        {/* 採血結果（5列）*/}
                         {rowFields.map(f => {
                           const rawVal = t[f.key];
                           const numVal = rawVal != null ? Number(rawVal) : null;
                           const grade  = numVal != null ? getGrade(f.key, numVal) : 0;
-                          const isWbc  = f.key === 'wbc' && rowIdx === 0;
                           return (
                             <TableCell key={f.key} sx={{
                               border: '1px solid #ddd',
@@ -548,31 +619,6 @@ export default function TreatmentListPage() {
                                 <span style={{ color: '#888' }}>{f.label}:</span>
                                 {numVal != null ? numVal : '-'}
                               </Typography>
-                              {/* 診察前面談ラベル：WBCセル(row0)に大きく表示 */}
-                              {isWbc && canClaimPreConsult && (
-                                <Box sx={{
-                                  mt: 0.5,
-                                  bgcolor: '#2e7d32', color: '#fff',
-                                  borderRadius: 0.5, p: '3px 4px',
-                                  fontSize: '0.68rem', fontWeight: 'bold',
-                                  textAlign: 'center', lineHeight: 1.3,
-                                  letterSpacing: '-0.02em',
-                                }}>
-                                  診察前面談<br/>算定可
-                                </Box>
-                              )}
-                              {isWbc && !canClaimPreConsult && (
-                                <Box sx={{
-                                  mt: 0.5,
-                                  bgcolor: '#e0e0e0', color: '#888',
-                                  borderRadius: 0.5, p: '3px 4px',
-                                  fontSize: '0.65rem',
-                                  textAlign: 'center', lineHeight: 1.3,
-                                  letterSpacing: '-0.02em',
-                                }}>
-                                  診察前面談<br/>算定済
-                                </Box>
-                              )}
                             </TableCell>
                           );
                         })}
@@ -698,12 +744,24 @@ export default function TreatmentListPage() {
         </DialogActions>
       </Dialog>
 
-      {/* 介入記録モーダル: onSaved でリロード（診察前面談算定済み更新） */}
+      {/* 保存完了スナックバー */}
+      <Snackbar
+        open={snackbar.open}
+        autoHideDuration={3000}
+        onClose={() => setSnackbar(s => ({ ...s, open: false }))}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      >
+        <Alert severity={snackbar.severity} sx={{ width: '100%' }}>
+          {snackbar.msg}
+        </Alert>
+      </Snackbar>
+
+      {/* 介入記録モーダル: onSaved でリロード */}
       <InterventionModal
         open={!!interventionTarget}
         treatment={interventionTarget}
         onClose={() => setInterventionTarget(null)}
-        onSaved={() => { setInterventionTarget(null); load(); }}
+        onSaved={() => { setInterventionTarget(null); load(selectedDate); }}
       />
     </>
   );

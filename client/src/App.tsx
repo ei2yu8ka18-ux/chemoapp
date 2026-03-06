@@ -10,6 +10,9 @@ import DiaryListPage from './pages/DiaryListPage';
 import MonthlyPage from './pages/MonthlyPage';
 import InterventionReportPage from './pages/InterventionReportPage';
 import PasswordChangePage from './pages/PasswordChangePage';
+import PreConsultSettingsPage from './pages/PreConsultSettingsPage';
+import DailySnapshotListPage from './pages/DailySnapshotListPage';
+import AuthLogsPage from './pages/AuthLogsPage';
 import Sidebar from './components/Sidebar';
 
 // 準備中ページ
@@ -85,8 +88,17 @@ function AppRoutes() {
       <Route path="/change-password" element={
         <PrivateRoute><AppLayout><PasswordChangePage /></AppLayout></PrivateRoute>
       } />
+      <Route path="/snapshot-list" element={
+        <PrivateRoute><AppLayout><DailySnapshotListPage /></AppLayout></PrivateRoute>
+      } />
       <Route path="/admin/users" element={
         <AdminRoute><AppLayout><UserManagementPage /></AppLayout></AdminRoute>
+      } />
+      <Route path="/admin/pre-consult-settings" element={
+        <AdminRoute><AppLayout><PreConsultSettingsPage /></AppLayout></AdminRoute>
+      } />
+      <Route path="/admin/auth-logs" element={
+        <AdminRoute><AppLayout><AuthLogsPage /></AppLayout></AdminRoute>
       } />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

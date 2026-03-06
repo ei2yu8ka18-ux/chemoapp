@@ -7,6 +7,9 @@ import interventionsRouter from './routes/interventions';
 import usersRouter from './routes/users';
 import workdiariesRouter from './routes/workdiaries';
 import monthlyRouter from './routes/monthly';
+import settingsRouter from './routes/settings';
+import dailySnapshotsRouter from './routes/daily-snapshots';
+import adminRouter from './routes/admin';
 
 dotenv.config();
 
@@ -34,7 +37,10 @@ app.use('/api/treatments', treatmentsRouter);
 app.use('/api/interventions', interventionsRouter);
 app.use('/api/users', usersRouter);
 app.use('/api/workdiaries', workdiariesRouter);
-app.use('/api/monthly', monthlyRouter);
+app.use('/api/monthly',          monthlyRouter);
+app.use('/api/settings',         settingsRouter);
+app.use('/api/daily-snapshots',  dailySnapshotsRouter);
+app.use('/api/admin',            adminRouter);
 
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
