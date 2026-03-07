@@ -131,15 +131,55 @@ router.get('/:patientId/detail', async (req: AuthRequest, res: Response) => {
     [patientId]
   );
 
-  // 直近の過去3回の scheduled_treatments（履歴）
-  const { rows: recentTreatments } = await pool.query(
-    `SELECT st.id, st.scheduled_date, st.status,
-       r.name AS regimen_name
+  // 治療歴（直近30件）: scheduled_treatments + patient_orders から抗腫瘍薬情報
+  const { rows: treatmentHistory } = await pool.query(
+    `SELECT st.id, st.scheduled_date, st.status, r.name AS regimen_name,
+       rc.cycle_no,
+       COALESCE(
+         (SELECT STRING_AGG(
+            po.drug_name || CASE WHEN po.dose IS NOT NULL
+              THEN ' ' || po.dose::text || COALESCE(po.dose_unit, '') ELSE '' END,
+            ' / ' ORDER BY po.drug_name)
+          FROM patient_orders po
+          WHERE po.patient_id = st.patient_id
+            AND po.order_date = st.scheduled_date
+            AND po.is_antineoplastic = true),
+         ''
+       ) AS antineoplastic_drugs,
+       COALESCE(
+         (SELECT STRING_AGG(
+            po.drug_name || CASE WHEN po.dose IS NOT NULL
+              THEN ' ' || po.dose::text || COALESCE(po.dose_unit, '') ELSE '' END,
+            ' / ' ORDER BY po.drug_name)
+          FROM patient_orders po
+          WHERE po.patient_id = st.patient_id
+            AND po.order_date = st.scheduled_date
+            AND po.is_antineoplastic = false),
+         ''
+       ) AS support_drugs
      FROM scheduled_treatments st
      JOIN regimens r ON r.id = st.regimen_id
+     LEFT JOIN regimen_calendar rc ON rc.patient_id = st.patient_id
+       AND rc.regimen_id = st.regimen_id
+       AND rc.treatment_date = st.scheduled_date
      WHERE st.patient_id = $1
-       AND st.scheduled_date < CURRENT_DATE
-     ORDER BY st.scheduled_date DESC LIMIT 6`,
+     ORDER BY st.scheduled_date DESC
+     LIMIT 30`,
+    [patientId]
+  );
+
+  // 今後のスケジュール（patient_orders の将来日付）
+  const { rows: futureSchedule } = await pool.query(
+    `SELECT DISTINCT order_date,
+       (SELECT STRING_AGG(drug_name || CASE WHEN dose IS NOT NULL
+          THEN ' ' || dose::text || COALESCE(dose_unit,'') ELSE '' END, ' / ' ORDER BY drug_name)
+        FROM patient_orders po2
+        WHERE po2.patient_id = po.patient_id AND po2.order_date = po.order_date AND po2.is_antineoplastic=true
+       ) AS antineoplastic_drugs
+     FROM patient_orders po
+     WHERE patient_id = $1 AND order_date > CURRENT_DATE
+     ORDER BY order_date
+     LIMIT 5`,
     [patientId]
   );
 
@@ -171,8 +211,9 @@ router.get('/:patientId/detail', async (req: AuthRequest, res: Response) => {
     medHistory,
     todayOrders,
     futureOrders,
+    treatmentHistory,
+    futureSchedule,
     todayTreatments,
-    recentTreatments,
     audits,
     doubts,
   });
