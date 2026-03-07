@@ -108,8 +108,11 @@ function generateDates(from: string, to: string): string[] {
 
 export default function RegimenCalendarPage() {
   const today = toDateStr(new Date());
-  const [fromDate, setFromDate] = useState(() => toDateStr(addMonths(new Date(), -3)));
-  const [toDate, setToDate] = useState(() => toDateStr(addMonths(new Date(), 1)));
+  // デフォルト: 昨日〜2ヶ月先
+  const [fromDate, setFromDate] = useState(() => {
+    const d = new Date(); d.setDate(d.getDate() - 1); return toDateStr(d);
+  });
+  const [toDate, setToDate] = useState(() => toDateStr(addMonths(new Date(), 2)));
 
   const [entries, setEntries] = useState<CalendarEntry[]>([]);
   const [patientRows, setPatientRows] = useState<PatientRow[]>([]);
