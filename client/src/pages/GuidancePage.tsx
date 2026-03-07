@@ -487,7 +487,7 @@ export default function GuidancePage() {
               fullWidth
               sx={{ bgcolor: '#1a5276', '&:hover': { bgcolor: '#154360' }, fontSize: '0.8rem' }}
             >
-              {loading ? '取り込み中...' : 'DWHから取り込み'}
+              {loading ? '取り込み中...' : '情報取込'}
             </Button>
           </Box>
 
@@ -566,7 +566,7 @@ export default function GuidancePage() {
           ) : (
             <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
               <Typography sx={{ color: '#aaa', fontSize: '0.9rem' }}>
-                日付を選択して「DWHから取り込み」ボタンを押してください
+                日付を選択して「情報取込」ボタンを押してください
               </Typography>
             </Box>
           )}

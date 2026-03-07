@@ -27,6 +27,7 @@ interface DiaryManual {
 }
 interface AutoStats {
   inj_done: number; inj_cancelled: number; inj_changed: number; inj_total: number;
+  oral_total: number; oral_done: number; oral_cancelled: number; oral_changed: number; oral_scheduled: number;
   cancer_guidance_count: number; pre_consultation_count: number;
   doubt_count: number; propose_count: number; inquiry_count: number; presc_changed_count: number;
 }
@@ -390,21 +391,8 @@ export default function DiaryPage() {
               </Table>
             </Box>
 
-            {/* 算定 + 手動入力 横並び */}
+            {/* 手動入力 */}
             <Box sx={{ display: 'flex', gap: 0.75, flexWrap: 'wrap', alignItems: 'center' }}>
-              <Table size="small" sx={{ borderCollapse: 'collapse', width: 'auto' }}>
-                <TableHead>
-                  <TableRow><GH span={2} color="#f8cecc">算定</GH></TableRow>
-                  <TableRow><TH>がん指導ハ</TH><TH>診察前</TH></TableRow>
-                </TableHead>
-                <TableBody>
-                  <TableRow>
-                    <TD center bold>{auto?.cancer_guidance_count ?? 0}</TD>
-                    <TD center bold>{auto?.pre_consultation_count ?? 0}</TD>
-                  </TableRow>
-                </TableBody>
-              </Table>
-
               {([
                 ['初回指導', 'first_visit_counseling'],
                 ['アレ中止', 'allergy_stop'],
@@ -434,9 +422,13 @@ export default function DiaryPage() {
                 </TableHead>
                 <TableBody>
                   <TableRow>
-                    {(['oral_scheduled','oral_done','oral_cancelled','oral_changed',
-                      'oral_patient_counseling','oral_first_visit',
-                    ] as (keyof DiaryManual)[]).map(k => (
+                    {/* 予定・実施・中止・変更 は auto stats から自動計算 */}
+                    <TD center bold>{auto?.oral_scheduled ?? 0}</TD>
+                    <TD center bold>{auto?.oral_done      ?? 0}</TD>
+                    <TD center bold>{auto?.oral_cancelled ?? 0}</TD>
+                    <TD center bold>{auto?.oral_changed   ?? 0}</TD>
+                    {/* 患者指導・初回指導 は手動入力 */}
+                    {(['oral_patient_counseling','oral_first_visit'] as (keyof DiaryManual)[]).map(k => (
                       <TableCell key={k} sx={{ border: '1px solid #ddd', p: '1px 3px' }}>
                         <NumCell value={manual[k] as number} onChange={v => setM(k, v)} />
                       </TableCell>
@@ -462,6 +454,25 @@ export default function DiaryPage() {
                 </TableBody>
               </Table>
             </Box>
+          </Paper>
+
+          {/* 算定 */}
+          <Paper elevation={1} sx={{ p: 0.75 }}>
+            <Typography sx={{ fontSize: '0.78rem', fontWeight: 'bold', mb: 0.25 }}>
+              ■ 算定
+            </Typography>
+            <Table size="small" sx={{ borderCollapse: 'collapse', width: 'auto' }}>
+              <TableHead>
+                <TableRow><GH span={2} color="#f8cecc">算定</GH></TableRow>
+                <TableRow><TH>がん患者指導ハ</TH><TH>がん薬物療法体制充実加算</TH></TableRow>
+              </TableHead>
+              <TableBody>
+                <TableRow>
+                  <TD center bold>{auto?.cancer_guidance_count ?? 0}</TD>
+                  <TD center bold>{auto?.pre_consultation_count ?? 0}</TD>
+                </TableRow>
+              </TableBody>
+            </Table>
           </Paper>
 
           </Box>{/* end print-right-top */}
@@ -497,7 +508,7 @@ export default function DiaryPage() {
                       </TableCell>
                       <TableCell sx={{ border: '1px solid #ddd', fontSize: '0.65rem', p: '2px 4px' }}>
                         {r.calc_cancer_guidance  ? 'がん指導 ' : ''}
-                        {r.calc_pre_consultation ? '診察前 '  : ''}
+                        {r.calc_pre_consultation ? 'がん薬物療法体制充実加算 '  : ''}
                         {r.prescription_changed  ? '処方変更 ' : ''}
                         {r.proxy_prescription    ? '代行処方 ' : ''}
                         {r.case_candidate        ? '症例候補'  : ''}

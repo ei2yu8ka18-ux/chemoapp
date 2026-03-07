@@ -38,6 +38,7 @@ export interface Treatment extends BloodResults {
   diagnosis: string;
   regimen_name: string;
   pre_consultation_this_month: number; // 当月の診察前面談算定回数
+  treatment_category: '注射' | '内服';  // 注射/内服区分（デフォルト: 注射）
 }
 
 export interface Intervention {

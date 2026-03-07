@@ -19,6 +19,7 @@ router.get('/', async (req: AuthRequest, res: Response) => {
       st.prescription_received,
       st.prescription_type,
       st.prescription_info,
+      COALESCE(st.treatment_category, '注射') AS treatment_category,
       p.patient_no,
       p.name AS patient_name,
       p.furigana,
@@ -87,6 +88,26 @@ router.patch('/:id/memo', async (req: AuthRequest, res: Response) => {
     [memo ?? null, id]
   );
   res.json(rows[0] ?? { id, memo });
+});
+
+// 注射/内服区分更新
+router.patch('/:id/category', async (req: AuthRequest, res: Response) => {
+  const { id } = req.params;
+  const { treatment_category } = req.body;
+
+  if (!['注射', '内服'].includes(treatment_category)) {
+    res.status(400).json({ error: 'invalid treatment_category' });
+    return;
+  }
+
+  const { rows } = await pool.query(
+    `UPDATE scheduled_treatments
+     SET treatment_category = $1, updated_at = NOW()
+     WHERE id = $2
+     RETURNING id, treatment_category`,
+    [treatment_category, id]
+  );
+  res.json(rows[0] ?? { id, treatment_category });
 });
 
 // 採血結果保存

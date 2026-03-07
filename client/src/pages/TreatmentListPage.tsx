@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   Box, Typography, Table, TableHead, TableRow, TableCell,
   TableBody, Button, TextField, Chip, AppBar,
@@ -24,6 +24,9 @@ const PRINT_CSS = `
   .status-col { display: none; }
 }
 @media screen { .print-only { display: none !important; } }
+/* リサイズハンドル */
+.rh { position: absolute; right: 0; top: 0; bottom: 0; width: 5px; cursor: col-resize; user-select: none; z-index: 1; }
+.rh:hover { background: rgba(255,255,255,0.5); }
 `;
 
 // ── 採血項目（3行×5列） ────────────────────────────────────────
@@ -138,6 +141,23 @@ const cellSx = { border: '1px solid #ddd', py: 0.25, px: 0.5, fontSize: '0.875re
 // 変更/中止の頻出理由
 const QUICK_REASONS = ['骨髄抑制', 'PD', '体調不良', '本人都合'] as const;
 
+// ── カラム定義（リサイズ対応） ────────────────────────────────
+const COL_KEYS = ['time','dept','patient','regimen','presc','inj','blood','status','memo'] as const;
+type ColKey = typeof COL_KEYS[number];
+const COL_DEFAULT_WIDTHS: Record<ColKey, number> = {
+  time: 44, dept: 50, patient: 110, regimen: 115,
+  presc: 74, inj: 62, blood: 52, status: 60, memo: 162,
+};
+const COL_STORAGE_KEY = 'treatment_list_col_widths_v1';
+
+function loadColWidths(): Record<ColKey, number> {
+  try {
+    const s = localStorage.getItem(COL_STORAGE_KEY);
+    if (s) return { ...COL_DEFAULT_WIDTHS, ...JSON.parse(s) };
+  } catch { /* ignore */ }
+  return { ...COL_DEFAULT_WIDTHS };
+}
+
 // ─────────────────────────────────────────────────────────────
 export default function TreatmentListPage() {
   const navigate = useNavigate();
@@ -176,6 +196,32 @@ export default function TreatmentListPage() {
     open: false, msg: '', severity: 'success',
   });
   const [saving, setSaving] = useState(false);
+
+  // カラムリサイズ
+  const [colWidths, setColWidths] = useState<Record<ColKey, number>>(loadColWidths);
+  const resizeRef = useRef<{ key: ColKey; startX: number; startW: number } | null>(null);
+
+  const startResize = useCallback((key: ColKey, e: React.MouseEvent) => {
+    e.preventDefault();
+    resizeRef.current = { key, startX: e.clientX, startW: colWidths[key] };
+    const onMove = (mv: MouseEvent) => {
+      if (!resizeRef.current) return;
+      const diff = mv.clientX - resizeRef.current.startX;
+      const newW = Math.max(30, resizeRef.current.startW + diff);
+      setColWidths(prev => ({ ...prev, [resizeRef.current!.key]: newW }));
+    };
+    const onUp = () => {
+      setColWidths(prev => {
+        localStorage.setItem(COL_STORAGE_KEY, JSON.stringify(prev));
+        return prev;
+      });
+      resizeRef.current = null;
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+    };
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+  }, [colWidths]);
 
   const load = useCallback(async (date: string) => {
     setLoading(true);
@@ -282,6 +328,19 @@ export default function TreatmentListPage() {
       setRegimenOpCount(res.data.new_value);
     } catch {
       setRegimenOpCount(c => Math.max(0, c + delta));
+    }
+  };
+
+  // 注射/内服区分切替
+  const handleCategoryToggle = async (id: number, current: '注射' | '内服') => {
+    const next: '注射' | '内服' = current === '注射' ? '内服' : '注射';
+    try {
+      await api.patch(`/treatments/${id}/category`, { treatment_category: next });
+      setTreatments(prev => prev.map(t =>
+        t.id === id ? { ...t, treatment_category: next } : t
+      ));
+    } catch {
+      /* ignore */
     }
   };
 
@@ -468,32 +527,58 @@ export default function TreatmentListPage() {
           <Box sx={{ display: 'flex', justifyContent: 'center', mt: 10 }}><CircularProgress /></Box>
         ) : (
           <Paper elevation={1}>
-            <Table size="small" sx={{ borderCollapse: 'collapse', minWidth: 1050 }}>
+            <Table size="small" sx={{ borderCollapse: 'collapse', tableLayout: 'fixed', minWidth: 800 }}>
+              <colgroup>
+                <col style={{ width: colWidths.time }} />
+                <col style={{ width: colWidths.dept }} />
+                <col style={{ width: colWidths.patient }} />
+                <col style={{ width: colWidths.regimen }} />
+                <col style={{ width: colWidths.presc }} />
+                <col style={{ width: colWidths.inj }} />
+                {/* 採血 5列 */}
+                <col style={{ width: colWidths.blood }} />
+                <col style={{ width: colWidths.blood }} />
+                <col style={{ width: colWidths.blood }} />
+                <col style={{ width: colWidths.blood }} />
+                <col style={{ width: colWidths.blood }} />
+                <col className="status-col" style={{ width: colWidths.status }} />
+                <col style={{ width: colWidths.memo }} />
+              </colgroup>
               <TableHead>
                 <TableRow sx={{ bgcolor: '#27ae60' }}>
-                  <TableCell sx={{ ...cellSx, color: '#fff', fontWeight: 'bold', width: 40, textAlign: 'center', fontSize: '0.78rem' }}>
-                    予定時間
-                  </TableCell>
-                  <TableCell sx={{ ...cellSx, color: '#fff', fontWeight: 'bold', width: 48, fontSize: '0.78rem' }}>
-                    診療科<br/>医師
-                  </TableCell>
-                  <TableCell sx={{ ...cellSx, color: '#fff', fontWeight: 'bold', width: 108, fontSize: '0.78rem' }}>実施予定患者</TableCell>
-                  <TableCell sx={{ ...cellSx, color: '#fff', fontWeight: 'bold', width: 108, fontSize: '0.78rem' }}>レジメン</TableCell>
-                  <TableCell sx={{ ...cellSx, color: '#fff', fontWeight: 'bold', width: 72, fontSize: '0.78rem' }}>
-                    緊急処方<br/>（前回）
-                  </TableCell>
-                  <TableCell sx={{ ...cellSx, color: '#fff', fontWeight: 'bold', width: 60, fontSize: '0.78rem' }}>
-                    注射情報<br/>(Bis/VB12)
-                  </TableCell>
-                  <TableCell colSpan={5} sx={{ ...cellSx, color: '#fff', fontWeight: 'bold', textAlign: 'center', fontSize: '0.78rem' }}>
+                  {([
+                    ['time',    '予定時間',       'center'],
+                    ['dept',    '診療科\n医師',    'left'],
+                    ['patient', '実施予定患者',    'left'],
+                    ['regimen', 'レジメン',        'left'],
+                    ['presc',   '緊急処方\n（前回）', 'left'],
+                    ['inj',     '注射情報\n(Bis/VB12)', 'left'],
+                  ] as [ColKey, string, string][]).map(([key, label, align]) => (
+                    <TableCell key={key} sx={{
+                      ...cellSx, color: '#fff', fontWeight: 'bold', fontSize: '0.78rem',
+                      textAlign: align as 'left'|'center', position: 'relative', overflow: 'hidden',
+                      whiteSpace: 'pre-wrap',
+                    }}>
+                      {label}
+                      <span className="rh no-print" onMouseDown={e => startResize(key, e)} />
+                    </TableCell>
+                  ))}
+                  <TableCell colSpan={5} sx={{ ...cellSx, color: '#fff', fontWeight: 'bold', textAlign: 'center', fontSize: '0.78rem', position: 'relative' }}>
                     採血情報（CTCAE v5.0）<br/>
                     <span style={{ color: '#90caf9' }}>■</span>G1&nbsp;
                     <span style={{ color: '#ffe0b2' }}>■</span>G2&nbsp;
                     <span style={{ color: '#fff9c4' }}>■</span>G3&nbsp;
                     <span style={{ color: '#ffcdd2' }}>■</span>G4
+                    <span className="rh no-print" onMouseDown={e => startResize('blood', e)} />
                   </TableCell>
-                  <TableCell className="status-col" sx={{ ...cellSx, color: '#fff', fontWeight: 'bold', width: 58, textAlign: 'center', fontSize: '0.78rem' }}>実施可否</TableCell>
-                  <TableCell sx={{ ...cellSx, color: '#fff', fontWeight: 'bold', width: 160, fontSize: '0.78rem' }}>備考</TableCell>
+                  <TableCell className="status-col" sx={{ ...cellSx, color: '#fff', fontWeight: 'bold', textAlign: 'center', fontSize: '0.78rem', position: 'relative' }}>
+                    実施可否
+                    <span className="rh no-print" onMouseDown={e => startResize('status', e)} />
+                  </TableCell>
+                  <TableCell sx={{ ...cellSx, color: '#fff', fontWeight: 'bold', fontSize: '0.78rem', position: 'relative' }}>
+                    備考
+                    <span className="rh no-print" onMouseDown={e => startResize('memo', e)} />
+                  </TableCell>
                 </TableRow>
               </TableHead>
 
@@ -566,6 +651,23 @@ export default function TreatmentListPage() {
                               {t.regimen_name}
                             </Typography>
                             <PrescChips value={t.prescription_type} />
+                            {/* 注射/内服切替チップ */}
+                            <Chip
+                              className="no-print"
+                              label={t.treatment_category ?? '注射'}
+                              size="small"
+                              onClick={() => handleCategoryToggle(t.id, t.treatment_category ?? '注射')}
+                              sx={{
+                                mt: 0.3,
+                                height: 16,
+                                fontSize: '0.6rem',
+                                cursor: 'pointer',
+                                bgcolor: (t.treatment_category ?? '注射') === '内服' ? '#f3e5f5' : '#e8f5e9',
+                                color:   (t.treatment_category ?? '注射') === '内服' ? '#6a1b9a' : '#1b5e20',
+                                border: `1px solid ${(t.treatment_category ?? '注射') === '内服' ? '#ab47bc' : '#43a047'}`,
+                                '& .MuiChip-label': { px: 0.75 },
+                              }}
+                            />
                             {t.status !== 'pending' && (
                               <Box sx={{ mt: 0.5, display: 'flex', flexDirection: 'row', flexWrap: 'wrap', gap: 0.5, alignItems: 'center' }}>
                                 <Typography sx={{ fontSize: '0.75rem', fontWeight: 'bold', color: STATUS_COLOR[t.status], lineHeight: 1.4 }}>
@@ -651,8 +753,8 @@ export default function TreatmentListPage() {
                               borderBottom: bloodBorder,
                               p: '1px 3px',
                               bgcolor: grade > 0 ? GRADE_BG[grade] : bg,
-                              width: 50, minWidth: 50, maxWidth: 50,
                               verticalAlign: 'middle',
+                              overflow: 'hidden',
                             }}>
                               <Typography sx={{
                                 fontSize: '0.6rem',
