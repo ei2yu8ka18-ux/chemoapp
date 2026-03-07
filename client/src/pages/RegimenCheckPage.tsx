@@ -17,6 +17,7 @@ import {
 } from 'recharts';
 import api from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
+import { useLocation } from 'react-router-dom';
 
 const API = '/regimen-check';
 
@@ -310,6 +311,7 @@ function SectionHeader({ color, children }: { color: string; children: React.Rea
 /* ─── メインコンポーネント ──────────────────────────────── */
 export default function RegimenCheckPage() {
   const { user } = useAuth();
+  const location = useLocation();
   const [patients, setPatients] = useState<Patient[]>([]);
   const [searchText, setSearchText] = useState('');
   const [selectedId, setSelectedId] = useState<number | null>(null);
@@ -338,6 +340,15 @@ export default function RegimenCheckPage() {
       .then(r => setPatients(r.data))
       .catch(e => console.error('patients fetch error:', e));
   }, []);
+
+  // レジメンカレンダーからの遷移で患者を自動選択
+  useEffect(() => {
+    const navPatientId = (location.state as any)?.patientId as number | undefined;
+    if (navPatientId && patients.length > 0 && !selectedId) {
+      handleSelect(navPatientId);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [patients.length, (location.state as any)?.patientId]);
 
   const loadDetail = useCallback(async (pid: number) => {
     setLoading(true); setError('');

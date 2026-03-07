@@ -362,7 +362,8 @@ router.get('/calendar', async (req: AuthRequest, res: Response) => {
          UNION ALL SELECT * FROM from_st
          UNION ALL SELECT * FROM from_orders WHERE regimen_id IS NOT NULL
        )
-       SELECT c.id, c.patient_id, c.regimen_id, c.treatment_date,
+       SELECT c.id, c.patient_id, c.regimen_id,
+         TO_CHAR(c.treatment_date, 'YYYY-MM-DD') AS treatment_date,
          c.cycle_no, c.status, c.audit_status, c.notes,
          p.patient_no, p.name AS patient_name, p.department,
          r.name AS regimen_name
