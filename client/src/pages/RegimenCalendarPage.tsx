@@ -4,9 +4,9 @@ import {
   Tooltip, Alert, TextField, IconButton,
 } from '@mui/material';
 import { ChevronLeft, ChevronRight, Refresh } from '@mui/icons-material';
-import axios from 'axios';
+import api from '../services/api';
 
-const API = '/api/regimen-check';
+const API = '/regimen-check';
 
 interface CalendarEntry {
   id: number;
@@ -135,8 +135,8 @@ export default function RegimenCalendarPage() {
     setError('');
     try {
       const [calRes, rowRes] = await Promise.all([
-        axios.get<CalendarEntry[]>(`${API}/calendar`, { params: { from: fromDate, to: toDate } }),
-        axios.get<PatientRow[]>(`${API}/calendar/patients`),
+        api.get<CalendarEntry[]>(`${API}/calendar`, { params: { from: fromDate, to: toDate } }),
+        api.get<PatientRow[]>(`${API}/calendar/patients`),
       ]);
       setEntries(calRes.data);
       setPatientRows(rowRes.data);
@@ -160,14 +160,14 @@ export default function RegimenCalendarPage() {
     try {
       if (existing) {
         // 更新
-        const res = await axios.patch<CalendarEntry>(`${API}/calendar/${existing.id}`, {
+        const res = await api.patch<CalendarEntry>(`${API}/calendar/${existing.id}`, {
           status: newStatus,
           audit_status: newAudit,
         });
         setEntries(prev => prev.map(e => e.id === existing.id ? res.data : e));
       } else if (newStatus) {
         // 新規作成
-        const res = await axios.post<CalendarEntry>(`${API}/calendar`, {
+        const res = await api.post<CalendarEntry>(`${API}/calendar`, {
           patient_id: row.patient_id,
           regimen_id: row.regimen_id,
           treatment_date: date,

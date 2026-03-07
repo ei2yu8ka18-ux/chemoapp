@@ -15,10 +15,10 @@ import {
   Tooltip as RechartTooltip, Legend, ResponsiveContainer,
   ReferenceLine, Label,
 } from 'recharts';
-import axios from 'axios';
+import api from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
 
-const API = '/api/regimen-check';
+const API = '/regimen-check';
 
 /* ─── 型定義 ─────────────────────────────────────────────── */
 interface Patient {
@@ -285,7 +285,7 @@ export default function RegimenCheckPage() {
 
   // 患者一覧
   useEffect(() => {
-    axios.get<Patient[]>(`${API}/patients`)
+    api.get<Patient[]>(`${API}/patients`)
       .then(r => setPatients(r.data))
       .catch(e => console.error('patients fetch error:', e));
   }, []);
@@ -293,7 +293,7 @@ export default function RegimenCheckPage() {
   const loadDetail = useCallback(async (pid: number) => {
     setLoading(true); setError('');
     try {
-      const r = await axios.get<Detail>(`${API}/${pid}/detail`);
+      const r = await api.get<Detail>(`${API}/${pid}/detail`);
       setDetail(r.data);
       setAuditComment(r.data.audits[0]?.comment || '');
       setHandoverNote(r.data.audits[0]?.handover_note || '');
@@ -309,7 +309,7 @@ export default function RegimenCheckPage() {
     if (!selectedId) return;
     setSavingAudit(true);
     try {
-      await axios.post(`${API}/${selectedId}/audits`, {
+      await api.post(`${API}/${selectedId}/audits`, {
         audit_date: new Date().toISOString().split('T')[0],
         pharmacist_name: user?.displayName || '',
         comment: auditComment, handover_note: handoverNote,
@@ -322,7 +322,7 @@ export default function RegimenCheckPage() {
     if (!selectedId || !doubtContent.trim()) return;
     setSavingDoubt(true);
     try {
-      await axios.post(`${API}/${selectedId}/doubts`, {
+      await api.post(`${API}/${selectedId}/doubts`, {
         content: doubtContent, pharmacist_name: user?.displayName || '',
       });
       setDoubtContent(''); setDoubtDialog(false);
@@ -332,13 +332,13 @@ export default function RegimenCheckPage() {
 
   const handleResolveDoubt = async () => {
     if (!resolveDialog) return;
-    await axios.patch(`${API}/doubts/${resolveDialog.id}`, { status: 'resolved', resolution });
+    await api.patch(`${API}/doubts/${resolveDialog.id}`, { status: 'resolved', resolution });
     setResolveDialog(null); setResolution('');
     if (selectedId) loadDetail(selectedId);
   };
 
   const handleReopenDoubt = async (d: Doubt) => {
-    await axios.patch(`${API}/doubts/${d.id}`, { status: 'open', resolution: null });
+    await api.patch(`${API}/doubts/${d.id}`, { status: 'open', resolution: null });
     if (selectedId) loadDetail(selectedId);
   };
 
