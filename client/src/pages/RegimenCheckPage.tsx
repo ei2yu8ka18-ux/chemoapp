@@ -37,6 +37,7 @@ interface MedHistory { id: number; condition_name: string; onset_date: string | 
 interface Order { id: number; order_date: string; drug_name: string; dose: number | null; dose_unit: string | null; route: string | null; is_antineoplastic: boolean; }
 interface TreatmentHistory {
   id: number; scheduled_date: string; status: string; regimen_name: string;
+  regimen_id: number; calendar_id: number | null;
   cycle_no: number | null; antineoplastic_drugs: string; support_drugs: string;
 }
 interface FutureSchedule { order_date: string; antineoplastic_drugs: string; }
@@ -199,8 +200,42 @@ function HepaticChart({ labs }: { labs: Lab[] }) {
   );
 }
 
-/* ─── オーダーカラム ────────────────────────────────────── */
-function OrderColumn({ orders, label, dateStr }: { orders: Order[]; label: string; dateStr: string }) {
+/* ─── 治療ステータスChip ─────────────────────────────────── */
+function TreatmentStatusChip({ status }: { status: string }) {
+  switch (status) {
+    case '予定': case 'planned':
+      return <Chip label="予定あり" size="small" sx={{ bgcolor: '#e3f2fd', color: '#1565c0', fontSize: '0.68rem', height: 18, fontWeight: 'bold' }} />;
+    case '変更': case 'changed':
+      return <Chip label="変更あり" size="small" sx={{ bgcolor: '#fff3e0', color: '#e65100', fontSize: '0.68rem', height: 18, fontWeight: 'bold' }} />;
+    case '実施': case 'done':
+      return <Chip label="済" size="small" sx={{ bgcolor: '#f5f5f5', color: '#757575', fontSize: '0.68rem', height: 18 }} />;
+    case '中止': case 'cancelled':
+      return <Chip label="中止" size="small" color="error" sx={{ fontSize: '0.68rem', height: 18 }} />;
+    default:
+      return <Chip label={status || '―'} size="small" sx={{ fontSize: '0.68rem', height: 18 }} />;
+  }
+}
+
+/* ─── オーダーカラム（経路削除・投与量編集） ──────────────── */
+function OrderColumn({
+  orders, label, dateStr, onReload,
+}: {
+  orders: Order[]; label: string; dateStr: string; onReload?: () => void;
+}) {
+  const [doseEdits, setDoseEdits] = useState<Record<number, string>>({});
+
+  const handleDoseSave = async (o: Order) => {
+    const raw = doseEdits[o.id];
+    if (raw === undefined) return;
+    const newDose = raw === '' ? null : Number(raw);
+    if (raw !== '' && isNaN(newDose as number)) return;
+    try {
+      await api.patch(`/regimen-check/patient-orders/${o.id}`, { dose: newDose });
+      onReload?.();
+    } catch { /* ignore */ }
+    setDoseEdits(prev => { const m = { ...prev }; delete m[o.id]; return m; });
+  };
+
   const anti = orders.filter(o => o.is_antineoplastic);
   const other = orders.filter(o => !o.is_antineoplastic);
   if (!orders.length) return (
@@ -208,6 +243,33 @@ function OrderColumn({ orders, label, dateStr }: { orders: Order[]; label: strin
       <Typography variant="body2" color="text.secondary">{label}（{dateStr}）：オーダーなし</Typography>
     </Box>
   );
+
+  const renderRow = (o: Order, isAnti: boolean) => {
+    const editing = doseEdits[o.id] !== undefined;
+    return (
+      <TableRow key={o.id} sx={{ bgcolor: isAnti ? '#fff8f0' : undefined }}>
+        <TableCell sx={{ fontSize: '0.75rem', py: 0.3, fontWeight: isAnti ? 'bold' : 'normal', color: isAnti ? '#b71c1c' : 'inherit' }}>
+          {o.drug_name}
+        </TableCell>
+        <TableCell sx={{ py: 0.2 }} align="right">
+          <TextField
+            value={editing ? doseEdits[o.id] : (o.dose ?? '')}
+            onChange={e => setDoseEdits(prev => ({ ...prev, [o.id]: e.target.value }))}
+            onBlur={() => handleDoseSave(o)}
+            onKeyDown={e => { if (e.key === 'Enter') handleDoseSave(o); }}
+            size="small"
+            placeholder="―"
+            sx={{
+              width: 65,
+              '& .MuiInputBase-input': { fontSize: '0.75rem', py: 0.2, px: 0.5, textAlign: 'right' },
+            }}
+          />
+        </TableCell>
+        <TableCell sx={{ fontSize: '0.75rem', py: 0.3 }}>{o.dose_unit ?? ''}</TableCell>
+      </TableRow>
+    );
+  };
+
   return (
     <Box>
       <Typography variant="caption" sx={{ fontWeight: 'bold', color: '#c62828', display: 'block', mb: 0.5 }}>
@@ -220,28 +282,13 @@ function OrderColumn({ orders, label, dateStr }: { orders: Order[]; label: strin
               <TableCell sx={{ fontSize: '0.7rem', py: 0.4, fontWeight: 'bold' }}>薬品名</TableCell>
               <TableCell sx={{ fontSize: '0.7rem', py: 0.4, fontWeight: 'bold' }} align="right">用量</TableCell>
               <TableCell sx={{ fontSize: '0.7rem', py: 0.4, fontWeight: 'bold' }}>単位</TableCell>
-              <TableCell sx={{ fontSize: '0.7rem', py: 0.4, fontWeight: 'bold' }}>経路</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
-            {anti.length > 0 && <TableRow><TableCell colSpan={4} sx={{ fontSize: '0.68rem', bgcolor: '#fff3e0', py: 0.2, fontWeight: 'bold' }}>■ 抗腫瘍薬</TableCell></TableRow>}
-            {anti.map(o => (
-              <TableRow key={o.id} sx={{ bgcolor: '#fff8f0' }}>
-                <TableCell sx={{ fontSize: '0.75rem', py: 0.3, fontWeight: 'bold', color: '#b71c1c' }}>{o.drug_name}</TableCell>
-                <TableCell sx={{ fontSize: '0.75rem', py: 0.3 }} align="right">{o.dose ?? '―'}</TableCell>
-                <TableCell sx={{ fontSize: '0.75rem', py: 0.3 }}>{o.dose_unit ?? ''}</TableCell>
-                <TableCell sx={{ fontSize: '0.75rem', py: 0.3 }}>{o.route ?? ''}</TableCell>
-              </TableRow>
-            ))}
-            {other.length > 0 && <TableRow><TableCell colSpan={4} sx={{ fontSize: '0.68rem', bgcolor: '#f5f5f5', py: 0.2 }}>■ 支持療法</TableCell></TableRow>}
-            {other.map(o => (
-              <TableRow key={o.id}>
-                <TableCell sx={{ fontSize: '0.75rem', py: 0.3 }}>{o.drug_name}</TableCell>
-                <TableCell sx={{ fontSize: '0.75rem', py: 0.3 }} align="right">{o.dose ?? '―'}</TableCell>
-                <TableCell sx={{ fontSize: '0.75rem', py: 0.3 }}>{o.dose_unit ?? ''}</TableCell>
-                <TableCell sx={{ fontSize: '0.75rem', py: 0.3 }}>{o.route ?? ''}</TableCell>
-              </TableRow>
-            ))}
+            {anti.length > 0 && <TableRow><TableCell colSpan={3} sx={{ fontSize: '0.68rem', bgcolor: '#fff3e0', py: 0.2, fontWeight: 'bold' }}>■ 抗腫瘍薬</TableCell></TableRow>}
+            {anti.map(o => renderRow(o, true))}
+            {other.length > 0 && <TableRow><TableCell colSpan={3} sx={{ fontSize: '0.68rem', bgcolor: '#f5f5f5', py: 0.2 }}>■ 支持療法</TableCell></TableRow>}
+            {other.map(o => renderRow(o, false))}
           </TableBody>
         </Table>
       </TableContainer>
@@ -340,6 +387,25 @@ export default function RegimenCheckPage() {
   const handleReopenDoubt = async (d: Doubt) => {
     await api.patch(`${API}/doubts/${d.id}`, { status: 'open', resolution: null });
     if (selectedId) loadDetail(selectedId);
+  };
+
+  // Cycle番号保存
+  const handleSaveCycle = async (t: TreatmentHistory, val: string) => {
+    const cycleNum = val === '' ? null : Number(val);
+    if (val !== '' && (isNaN(cycleNum as number) || (cycleNum as number) < 1)) return;
+    try {
+      if (t.calendar_id) {
+        await api.patch(`${API}/calendar/${t.calendar_id}`, { cycle_no: cycleNum });
+      } else {
+        await api.post(`${API}/calendar/cycle`, {
+          patient_id: selectedId,
+          regimen_id: t.regimen_id,
+          treatment_date: t.scheduled_date,
+          cycle_no: cycleNum,
+        });
+      }
+      if (selectedId) loadDetail(selectedId);
+    } catch { /* ignore */ }
   };
 
   const filtered = patients.filter(p =>
@@ -446,7 +512,7 @@ export default function RegimenCheckPage() {
                         <TableRow>
                           <TableCell sx={{ fontSize: '0.72rem', py: 0.5, bgcolor: '#eceff1', fontWeight: 'bold', whiteSpace: 'nowrap' }}>実施日</TableCell>
                           <TableCell sx={{ fontSize: '0.72rem', py: 0.5, bgcolor: '#eceff1', fontWeight: 'bold' }}>レジメン</TableCell>
-                          <TableCell sx={{ fontSize: '0.72rem', py: 0.5, bgcolor: '#eceff1', fontWeight: 'bold' }}>Cy</TableCell>
+                          <TableCell sx={{ fontSize: '0.72rem', py: 0.5, bgcolor: '#eceff1', fontWeight: 'bold' }}>Cycle</TableCell>
                           <TableCell sx={{ fontSize: '0.72rem', py: 0.5, bgcolor: '#eceff1', fontWeight: 'bold' }}>状態</TableCell>
                           <TableCell sx={{ fontSize: '0.72rem', py: 0.5, bgcolor: '#eceff1', fontWeight: 'bold' }}>抗腫瘍薬（オーダー）</TableCell>
                           <TableCell sx={{ fontSize: '0.72rem', py: 0.5, bgcolor: '#eceff1', fontWeight: 'bold' }}>支持療法</TableCell>
@@ -460,11 +526,21 @@ export default function RegimenCheckPage() {
                               {fmtDate(t.scheduled_date) === todayStr && <Chip label="今日" size="small" color="warning" sx={{ ml: 0.5, fontSize: '0.62rem', height: 15 }} />}
                             </TableCell>
                             <TableCell sx={{ fontSize: '0.78rem', py: 0.4, fontWeight: 'bold', color: '#1a237e' }}>{t.regimen_name}</TableCell>
-                            <TableCell sx={{ fontSize: '0.72rem', py: 0.4, color: '#555' }}>{t.cycle_no ?? '―'}</TableCell>
+                            <TableCell sx={{ py: 0.2 }}>
+                              <TextField
+                                key={`cycle-${t.id}-${t.cycle_no}`}
+                                defaultValue={t.cycle_no ?? ''}
+                                onBlur={e => handleSaveCycle(t, e.target.value)}
+                                onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
+                                size="small"
+                                placeholder="―"
+                                type="number"
+                                inputProps={{ min: 1, style: { textAlign: 'center' } }}
+                                sx={{ width: 56, '& .MuiInputBase-input': { fontSize: '0.75rem', py: 0.2, px: 0.5 } }}
+                              />
+                            </TableCell>
                             <TableCell sx={{ fontSize: '0.72rem', py: 0.4 }}>
-                              <Chip label={t.status} size="small"
-                                color={t.status === '実施' ? 'success' : t.status === '中止' ? 'error' : 'default'}
-                                sx={{ fontSize: '0.68rem', height: 18 }} />
+                              <TreatmentStatusChip status={t.status} />
                             </TableCell>
                             <TableCell sx={{ fontSize: '0.72rem', py: 0.4, color: t.antineoplastic_drugs ? '#b71c1c' : '#bbb' }}>
                               {t.antineoplastic_drugs || '（オーダーデータなし）'}
@@ -499,8 +575,8 @@ export default function RegimenCheckPage() {
             <Paper variant="outlined" sx={{ mb: 1.5, p: 1.2 }}>
               <SectionHeader color="#c62828">📋 オーダー確認（今回 vs 次回）</SectionHeader>
               <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1.5 }}>
-                <OrderColumn orders={detail.todayOrders} label="今回オーダー" dateStr={fmtDate(todayStr)} />
-                <OrderColumn orders={detail.futureOrders} label="次回オーダー" dateStr={fmtDate(futureDate)} />
+                <OrderColumn orders={detail.todayOrders} label="今回オーダー" dateStr={fmtDate(todayStr)} onReload={() => selectedId && loadDetail(selectedId)} />
+                <OrderColumn orders={detail.futureOrders} label="次回オーダー" dateStr={fmtDate(futureDate)} onReload={() => selectedId && loadDetail(selectedId)} />
               </Box>
             </Paper>
 

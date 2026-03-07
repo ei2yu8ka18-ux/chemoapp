@@ -1,21 +1,21 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   Box, Typography, Button, Chip, CircularProgress,
   Tooltip, Alert, TextField, IconButton,
 } from '@mui/material';
-import { ChevronLeft, ChevronRight, Refresh } from '@mui/icons-material';
+import { ChevronLeft, ChevronRight, Refresh, Edit as EditIcon, Check as CheckIcon, Close as CloseIcon } from '@mui/icons-material';
 import api from '../services/api';
 
 const API = '/regimen-check';
 
 interface CalendarEntry {
-  id: number;
+  id: number | null;
   patient_id: number;
   regimen_id: number;
   treatment_date: string;
-  cycle_no: number;
-  status: string;       // planned / done / cancelled / null
-  audit_status: string | null;  // 'audited' or null
+  cycle_no: number | null;
+  status: string | null;   // planned / done / changed / cancelled / null
+  audit_status: string | null;
   notes: string | null;
   patient_no: string;
   patient_name: string;
@@ -28,87 +28,111 @@ interface PatientRow {
   patient_no: string;
   patient_name: string;
   department: string;
-  regimen_id: number;
   regimen_name: string;
+  regimen_ids: number[];  // (patient_id, regimen_name) でグループ化した全regimen_id
 }
 
-// ステータスの表示記号
-function statusSymbol(status: string | null, audit_status: string | null): string {
-  if (!status || status === '') return '';
-  if (status === 'planned' && audit_status === 'audited') return '◎';
-  if (status === 'planned') return '○';
-  if (status === 'done') return '●';
-  if (status === 'cancelled') return '×';
-  return '';
+// ── ステータス定義 ────────────────────────────────────────────
+const STATUS_DEF: Record<string, { sym: string; label: string; color: string; bg: string }> = {
+  planned:   { sym: '○', label: '予定',  color: '#1565c0', bg: '#e3f2fd' },
+  done:      { sym: '●', label: '実施',  color: '#2e7d32', bg: '#e8f5e9' },
+  changed:   { sym: '▲', label: '変更',  color: '#e65100', bg: '#fff3e0' },
+  cancelled: { sym: '×', label: '中止',  color: '#c62828', bg: '#ffebee' },
+};
+
+// クリックサイクル: null → planned → done → changed → cancelled → null
+const STATUS_CYCLE: (string | null)[] = [null, 'planned', 'done', 'changed', 'cancelled'];
+
+function nextStatus(cur: string | null): string | null {
+  const idx = STATUS_CYCLE.indexOf(cur);
+  return STATUS_CYCLE[(idx + 1) % STATUS_CYCLE.length];
 }
 
-// ステータスの色
-function statusColor(status: string | null, audit_status: string | null): string {
-  if (status === 'planned' && audit_status === 'audited') return '#1565c0';
-  if (status === 'planned') return '#1976d2';
-  if (status === 'done') return '#2e7d32';
-  if (status === 'cancelled') return '#c62828';
-  return '#999';
-}
+function statusSym(status: string | null) { return status ? (STATUS_DEF[status]?.sym ?? '') : ''; }
+function statusColor(status: string | null) { return status ? (STATUS_DEF[status]?.color ?? '#999') : '#999'; }
+function statusBg(status: string | null) { return status ? (STATUS_DEF[status]?.bg ?? 'transparent') : 'transparent'; }
 
-// ステータス背景色
-function statusBg(status: string | null, audit_status: string | null): string {
-  if (status === 'planned' && audit_status === 'audited') return '#bbdefb';
-  if (status === 'planned') return '#e3f2fd';
-  if (status === 'done') return '#e8f5e9';
-  if (status === 'cancelled') return '#ffebee';
-  return 'transparent';
-}
-
-// 次のステータスへサイクル
-function nextStatus(cur: string | null, audit: string | null): { status: string | null; audit_status: string | null } {
-  if (!cur || cur === '') return { status: 'planned', audit_status: null };
-  if (cur === 'planned' && !audit) return { status: 'planned', audit_status: 'audited' };
-  if (cur === 'planned' && audit === 'audited') return { status: 'done', audit_status: null };
-  if (cur === 'done') return { status: 'cancelled', audit_status: null };
-  if (cur === 'cancelled') return { status: null, audit_status: null };
-  return { status: null, audit_status: null };
-}
-
-// 日付ユーティリティ
+// ── 日付ユーティリティ ────────────────────────────────────────
 function addMonths(date: Date, months: number): Date {
   const d = new Date(date);
   d.setMonth(d.getMonth() + months);
   return d;
 }
-function toDateStr(d: Date): string {
-  return d.toISOString().split('T')[0];
-}
-function parseDate(s: string): Date {
-  return new Date(s + 'T00:00:00');
-}
+function toDateStr(d: Date): string { return d.toISOString().split('T')[0]; }
+function parseDate(s: string): Date { return new Date(s + 'T00:00:00'); }
 function daysBetween(a: string, b: string): number {
   return Math.round((parseDate(b).getTime() - parseDate(a).getTime()) / 86400000);
 }
-// YYYY-MM-DD → MM/DD
-function shortDate(s: string): string {
-  return s.slice(5).replace('-', '/');
-}
-// 週の曜日判定（土: 6, 日: 0）
-function dayOfWeek(s: string): number {
-  return parseDate(s).getDay();
-}
+function shortDate(s: string): string { return s.slice(5).replace('-', '/'); }
+function dayOfWeek(s: string): number { return parseDate(s).getDay(); }
 
-// 表示対象日付リストを生成
 function generateDates(from: string, to: string): string[] {
   const dates: string[] = [];
   const cur = parseDate(from);
   const end = parseDate(to);
-  while (cur <= end) {
-    dates.push(toDateStr(cur));
-    cur.setDate(cur.getDate() + 1);
-  }
+  while (cur <= end) { dates.push(toDateStr(cur)); cur.setDate(cur.getDate() + 1); }
   return dates;
 }
 
+// ── レジメン名インライン編集コンポーネント ────────────────────
+function RegimenNameCell({
+  row, onRename,
+}: {
+  row: PatientRow;
+  onRename: (regimenIds: number[], newName: string) => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(row.regimen_name);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const startEdit = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setDraft(row.regimen_name);
+    setEditing(true);
+    setTimeout(() => inputRef.current?.focus(), 50);
+  };
+  const cancel = () => { setEditing(false); setDraft(row.regimen_name); };
+  const save = () => {
+    if (draft.trim() && draft.trim() !== row.regimen_name) {
+      onRename(row.regimen_ids, draft.trim());
+    }
+    setEditing(false);
+  };
+
+  if (editing) {
+    return (
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.3 }} onClick={e => e.stopPropagation()}>
+        <TextField
+          inputRef={inputRef}
+          value={draft}
+          onChange={e => setDraft(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter') save(); if (e.key === 'Escape') cancel(); }}
+          size="small"
+          sx={{ width: 130, '& .MuiInputBase-input': { fontSize: '0.72rem', py: 0.2, px: 0.5 } }}
+        />
+        <IconButton size="small" color="success" onClick={save} sx={{ p: 0.2 }}><CheckIcon sx={{ fontSize: 14 }} /></IconButton>
+        <IconButton size="small" onClick={cancel} sx={{ p: 0.2 }}><CloseIcon sx={{ fontSize: 14 }} /></IconButton>
+      </Box>
+    );
+  }
+
+  return (
+    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.3, cursor: 'default' }}>
+      <Typography sx={{ fontSize: '0.70rem', color: '#444', lineHeight: 1.3, flex: 1 }}>
+        {row.regimen_name}
+      </Typography>
+      <Tooltip title="レジメン名を編集" placement="right">
+        <IconButton size="small" onClick={startEdit} sx={{ p: 0.1, opacity: 0.4, '&:hover': { opacity: 1 } }}>
+          <EditIcon sx={{ fontSize: 11 }} />
+        </IconButton>
+      </Tooltip>
+    </Box>
+  );
+}
+
+// ── メインコンポーネント ──────────────────────────────────────
 export default function RegimenCalendarPage() {
   const today = toDateStr(new Date());
-  // デフォルト: 昨日〜2ヶ月先
   const [fromDate, setFromDate] = useState(() => {
     const d = new Date(); d.setDate(d.getDate() - 1); return toDateStr(d);
   });
@@ -119,17 +143,19 @@ export default function RegimenCalendarPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  // エントリのマップ: `${patient_id}-${regimen_id}-${date}` → entry
+  // entryMap: `${patient_id}-${regimen_name}-${date}` → entry
   const entryMap = useMemo(() => {
     const map = new Map<string, CalendarEntry>();
-    entries.forEach(e => map.set(`${e.patient_id}-${e.regimen_id}-${e.treatment_date}`, e));
+    entries.forEach(e => {
+      const key = `${e.patient_id}-${e.regimen_name}-${e.treatment_date}`;
+      // 同じキーなら manual (id あり) を優先
+      if (!map.has(key) || e.id !== null) map.set(key, e);
+    });
     return map;
   }, [entries]);
 
-  // 表示日付リスト
   const dates = useMemo(() => generateDates(fromDate, toDate), [fromDate, toDate]);
 
-  // データ取得
   const fetchData = useCallback(async () => {
     setLoading(true);
     setError('');
@@ -151,56 +177,91 @@ export default function RegimenCalendarPage() {
 
   // セルクリック → ステータスサイクル
   const handleCellClick = async (row: PatientRow, date: string) => {
-    const key = `${row.patient_id}-${row.regimen_id}-${date}`;
+    const key = `${row.patient_id}-${row.regimen_name}-${date}`;
     const existing = entryMap.get(key);
-    const cur_status = existing?.status ?? null;
-    const cur_audit = existing?.audit_status ?? null;
-    const { status: newStatus, audit_status: newAudit } = nextStatus(cur_status, cur_audit);
+    const curStatus = existing?.status ?? null;
+    const newStatus = nextStatus(curStatus);
+    const regimenId = existing?.regimen_id ?? row.regimen_ids[0];
 
     try {
-      if (existing) {
-        // 更新
+      if (existing?.id) {
+        // 既存レコード更新
         const res = await api.patch<CalendarEntry>(`${API}/calendar/${existing.id}`, {
           status: newStatus,
-          audit_status: newAudit,
+          audit_status: null,
         });
-        setEntries(prev => prev.map(e => e.id === existing.id ? res.data : e));
-      } else if (newStatus) {
+        const updated = { ...res.data, patient_no: row.patient_no, patient_name: row.patient_name, department: row.department, regimen_name: row.regimen_name };
+        setEntries(prev => prev.map(e => (e.id === existing.id ? updated : e)));
+      } else if (existing && existing.id === null) {
+        // auto-entry (scheduled_treatments 由来) → DB に保存
+        if (newStatus) {
+          const res = await api.post<CalendarEntry>(`${API}/calendar`, {
+            patient_id: row.patient_id,
+            regimen_id: regimenId,
+            treatment_date: date,
+            status: newStatus,
+          });
+          const added = { ...res.data, patient_no: row.patient_no, patient_name: row.patient_name, department: row.department, regimen_name: row.regimen_name };
+          setEntries(prev => [...prev.filter(e => !(e.patient_id === row.patient_id && e.regimen_name === row.regimen_name && e.treatment_date === date && e.id === null)), added]);
+        } else {
+          // null に戻す → auto-entry に戻す（DBエントリは不要）
+          setEntries(prev => prev.filter(e => !(e.patient_id === row.patient_id && e.regimen_name === row.regimen_name && e.treatment_date === date)));
+          fetchData();
+        }
+      } else {
         // 新規作成
-        const res = await api.post<CalendarEntry>(`${API}/calendar`, {
-          patient_id: row.patient_id,
-          regimen_id: row.regimen_id,
-          treatment_date: date,
-          status: newStatus,
-          audit_status: newAudit,
-        });
-        setEntries(prev => [...prev, res.data]);
+        if (newStatus) {
+          const res = await api.post<CalendarEntry>(`${API}/calendar`, {
+            patient_id: row.patient_id,
+            regimen_id: regimenId,
+            treatment_date: date,
+            status: newStatus,
+          });
+          const added = { ...res.data, patient_no: row.patient_no, patient_name: row.patient_name, department: row.department, regimen_name: row.regimen_name };
+          setEntries(prev => [...prev, added]);
+        }
       }
     } catch {
-      // 失敗時は再フェッチで同期
       fetchData();
     }
   };
 
-  // 月移動
+  // レジメン名変更
+  const handleRename = async (regimenIds: number[], newName: string) => {
+    try {
+      // 全 regimen_id を更新
+      await Promise.all(regimenIds.map(id =>
+        api.patch(`${API}/regimens/${id}`, { name: newName })
+      ));
+      // patientRows と entries を更新
+      setPatientRows(prev => prev.map(r =>
+        regimenIds.some(id => r.regimen_ids.includes(id))
+          ? { ...r, regimen_name: newName }
+          : r
+      ));
+      setEntries(prev => prev.map(e =>
+        regimenIds.includes(e.regimen_id)
+          ? { ...e, regimen_name: newName }
+          : e
+      ));
+    } catch {
+      alert('レジメン名の変更に失敗しました');
+    }
+  };
+
   const shiftMonth = (delta: number) => {
-    const newFrom = addMonths(parseDate(fromDate), delta);
-    const newTo = addMonths(parseDate(toDate), delta);
-    setFromDate(toDateStr(newFrom));
-    setToDate(toDateStr(newTo));
+    setFromDate(toDateStr(addMonths(parseDate(fromDate), delta)));
+    setToDate(toDateStr(addMonths(parseDate(toDate), delta)));
   };
 
-  // 今月に戻す
   const goToToday = () => {
-    setFromDate(toDateStr(addMonths(new Date(), -3)));
-    setToDate(toDateStr(addMonths(new Date(), 1)));
+    setFromDate(toDateStr(addMonths(new Date(), -1)));
+    setToDate(toDateStr(addMonths(new Date(), 2)));
   };
 
-  // 列幅（日付の数が多い場合は縮小）
   const COL_W = dates.length > 60 ? 28 : dates.length > 30 ? 32 : 38;
-  const PATIENT_COL_W = 180;
+  const PATIENT_COL_W = 200;
 
-  // 月境界（日付ラベル行で月が変わる箇所）
   const monthBoundaries = useMemo(() => {
     const bounds: { date: string; month: string }[] = [];
     let curMonth = '';
@@ -240,20 +301,15 @@ export default function RegimenCalendarPage() {
 
         <Box sx={{ ml: 'auto', display: 'flex', gap: 1, alignItems: 'center', flexWrap: 'wrap' }}>
           <Typography variant="caption" sx={{ color: '#555' }}>凡例：</Typography>
-          {[
-            { sym: '○', label: '予定', color: '#1976d2', bg: '#e3f2fd' },
-            { sym: '◎', label: '予定+監査済', color: '#1565c0', bg: '#bbdefb' },
-            { sym: '●', label: '実施', color: '#2e7d32', bg: '#e8f5e9' },
-            { sym: '×', label: '中止', color: '#c62828', bg: '#ffebee' },
-          ].map(l => (
-            <Box key={l.sym} sx={{ display: 'flex', alignItems: 'center', gap: 0.3 }}>
-              <Box sx={{ width: 20, height: 20, bgcolor: l.bg, border: `1px solid ${l.color}`, borderRadius: 0.5, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <Typography sx={{ fontSize: '0.75rem', color: l.color, fontWeight: 'bold' }}>{l.sym}</Typography>
+          {Object.entries(STATUS_DEF).map(([, def]) => (
+            <Box key={def.sym} sx={{ display: 'flex', alignItems: 'center', gap: 0.3 }}>
+              <Box sx={{ width: 20, height: 20, bgcolor: def.bg, border: `1px solid ${def.color}`, borderRadius: 0.5, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <Typography sx={{ fontSize: '0.75rem', color: def.color, fontWeight: 'bold' }}>{def.sym}</Typography>
               </Box>
-              <Typography variant="caption">{l.label}</Typography>
+              <Typography variant="caption">{def.label}</Typography>
             </Box>
           ))}
-          <Typography variant="caption" sx={{ color: '#888' }}>（クリックで変更: ○→◎→●→×→消去）</Typography>
+          <Typography variant="caption" sx={{ color: '#888' }}>（クリック: ○→●→▲→×→消去）</Typography>
         </Box>
       </Box>
 
@@ -278,7 +334,6 @@ export default function RegimenCalendarPage() {
                   患者 / レジメン
                 </th>
                 {monthBoundaries.map(({ date, month }) => {
-                  // この月に属する日付数
                   const cnt = dates.filter(d => d.startsWith(month)).length;
                   return (
                     <th key={date} colSpan={cnt} style={{
@@ -299,20 +354,14 @@ export default function RegimenCalendarPage() {
                 }} />
                 {dates.map(d => {
                   const dow = dayOfWeek(d);
-                  const isSat = dow === 6;
-                  const isSun = dow === 0;
-                  const isToday = d === today;
+                  const isSat = dow === 6, isSun = dow === 0, isToday = d === today;
                   return (
                     <th key={d} style={{
                       background: isToday ? '#fff176' : isSat ? '#e3f2fd' : isSun ? '#fce4ec' : '#ecf0f1',
-                      fontSize: 9,
-                      padding: '2px 1px',
-                      textAlign: 'center',
+                      fontSize: 9, padding: '2px 1px', textAlign: 'center',
                       color: isToday ? '#e65100' : isSat ? '#1565c0' : isSun ? '#c62828' : '#333',
                       fontWeight: isToday ? 'bold' : 'normal',
-                      borderLeft: '1px solid #ddd',
-                      borderBottom: '2px solid #bbb',
-                      whiteSpace: 'nowrap',
+                      borderLeft: '1px solid #ddd', borderBottom: '2px solid #bbb', whiteSpace: 'nowrap',
                     }}>
                       {shortDate(d)}
                     </th>
@@ -324,40 +373,39 @@ export default function RegimenCalendarPage() {
               {patientRows.length === 0 && (
                 <tr>
                   <td colSpan={dates.length + 1} style={{ padding: 24, textAlign: 'center', color: '#888', fontSize: 13 }}>
-                    データがありません。マイグレーション 010 を実行してテストデータを投入してください。
+                    データがありません
                   </td>
                 </tr>
               )}
               {patientRows.map((row, ri) => {
                 const isOdd = ri % 2 === 0;
+                const rowBg = isOdd ? '#fff' : '#f9f9fb';
                 return (
-                  <tr key={`${row.patient_id}-${row.regimen_id}`} style={{ background: isOdd ? '#fff' : '#f9f9fb' }}>
+                  <tr key={`${row.patient_id}-${row.regimen_name}`} style={{ background: rowBg }}>
                     {/* 患者セル */}
                     <td style={{
                       position: 'sticky', left: 0, zIndex: 2,
-                      background: isOdd ? '#fff' : '#f9f9fb',
+                      background: rowBg,
                       borderRight: '2px solid #bbb',
                       borderBottom: '1px solid #e0e0e0',
                       padding: '4px 8px',
                       minWidth: PATIENT_COL_W,
                     }}>
-                      <Typography sx={{ fontSize: '0.75rem', fontWeight: 'bold', color: '#1a237e', lineHeight: 1.2 }}>
-                        {row.patient_no} {row.patient_name}
+                      <Typography sx={{ fontSize: '0.75rem', fontWeight: 'bold', color: '#1a237e', lineHeight: 1.3 }}>
+                        {row.patient_no}　{row.patient_name}
                       </Typography>
-                      <Typography sx={{ fontSize: '0.68rem', color: '#555', lineHeight: 1.2 }}>
-                        {row.regimen_name}
-                      </Typography>
+                      <RegimenNameCell row={row} onRename={handleRename} />
                       <Typography sx={{ fontSize: '0.65rem', color: '#888' }}>
                         {row.department}
                       </Typography>
                     </td>
                     {/* 日付セル */}
                     {dates.map(d => {
-                      const key = `${row.patient_id}-${row.regimen_id}-${d}`;
+                      const key = `${row.patient_id}-${row.regimen_name}-${d}`;
                       const entry = entryMap.get(key);
-                      const sym = statusSymbol(entry?.status ?? null, entry?.audit_status ?? null);
-                      const col = statusColor(entry?.status ?? null, entry?.audit_status ?? null);
-                      const bg = statusBg(entry?.status ?? null, entry?.audit_status ?? null);
+                      const sym = statusSym(entry?.status ?? null);
+                      const col = statusColor(entry?.status ?? null);
+                      const bg = statusBg(entry?.status ?? null);
                       const dow = dayOfWeek(d);
                       const isToday = d === today;
                       const cellBg = entry ? bg : isToday ? '#fffde7' : dow === 6 ? '#fafcff' : dow === 0 ? '#fff5f5' : 'transparent';
@@ -379,15 +427,11 @@ export default function RegimenCalendarPage() {
                         >
                           {sym ? (
                             <Tooltip
-                              title={
-                                entry
-                                  ? `${entry.status === 'planned' ? '予定' : entry.status === 'done' ? '実施' : '中止'}${entry.audit_status === 'audited' ? '（監査済）' : ''}　${entry.notes || ''}`
-                                  : ''
-                              }
+                              title={entry ? `${STATUS_DEF[entry.status!]?.label ?? ''}${entry.notes ? '　' + entry.notes : ''}` : ''}
                               placement="top"
                               arrow
                             >
-                              <Typography sx={{ fontSize: COL_W < 30 ? '0.75rem' : '0.85rem', color: col, fontWeight: 'bold', lineHeight: 1 }}>
+                              <Typography sx={{ fontSize: COL_W < 30 ? '0.75rem' : '0.88rem', color: col, fontWeight: 'bold', lineHeight: 1 }}>
                                 {sym}
                               </Typography>
                             </Tooltip>
@@ -406,33 +450,20 @@ export default function RegimenCalendarPage() {
       {/* 統計サマリー */}
       {!loading && entries.length > 0 && (
         <Box sx={{ mt: 0.5, display: 'flex', gap: 2, flexWrap: 'wrap', px: 1 }}>
-          {[
-            { label: '予定', status: 'planned', audit: null },
-            { label: '監査済予定', status: 'planned', audit: 'audited' },
-            { label: '実施', status: 'done', audit: null },
-            { label: '中止', status: 'cancelled', audit: null },
-          ].map(({ label, status, audit }) => {
-            const count = entries.filter(e =>
-              e.status === status &&
-              (audit === null ? e.audit_status === null : e.audit_status === audit)
-            ).length;
+          {Object.entries(STATUS_DEF).map(([status, def]) => {
+            const count = entries.filter(e => e.status === status).length;
             return (
-              <Box key={label} sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+              <Box key={status} sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
                 <Chip
-                  label={`${label}: ${count}件`}
+                  label={`${def.label}: ${count}件`}
                   size="small"
-                  sx={{
-                    fontSize: '0.7rem',
-                    bgcolor: statusBg(status, audit),
-                    color: statusColor(status, audit),
-                    border: `1px solid ${statusColor(status, audit)}`,
-                  }}
+                  sx={{ fontSize: '0.7rem', bgcolor: def.bg, color: def.color, border: `1px solid ${def.color}` }}
                 />
               </Box>
             );
           })}
           <Typography variant="caption" sx={{ color: '#888', alignSelf: 'center' }}>
-            表示期間: {fromDate} 〜 {toDate}（{totalDays}日）/ {patientRows.length}患者×レジメン
+            表示期間: {fromDate} 〜 {toDate}（{totalDays}日）/ {patientRows.length}行
           </Typography>
         </Box>
       )}
