@@ -8,7 +8,7 @@ import {
 } from '@mui/material';
 import {
   Search, Add, CheckCircle, RadioButtonUnchecked,
-  Person, ExpandMore, ExpandLess,
+  Person, ExpandMore, ExpandLess, Warning,
 } from '@mui/icons-material';
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid,
@@ -39,6 +39,8 @@ interface TreatmentHistory {
   id: number; scheduled_date: string; status: string; regimen_name: string;
   regimen_id: number; calendar_id: number | null;
   cycle_no: number | null; antineoplastic_drugs: string; support_drugs: string;
+  audit_status: string | null;    // null / 'audited' / 'doubt'
+  calendar_status: string | null; // regimen_calendar.status
 }
 interface FutureSchedule { order_date: string; antineoplastic_drugs: string; }
 interface Audit { id: number; audit_date: string; pharmacist_name: string; comment: string; handover_note: string; created_at: string; }
@@ -408,6 +410,21 @@ export default function RegimenCheckPage() {
     } catch { /* ignore */ }
   };
 
+  // 監査ステータス設定
+  const handleSetAuditStatus = async (t: TreatmentHistory, newAuditStatus: string | null) => {
+    // 同じステータスをクリックしたら未監査に戻す
+    const actualStatus = t.audit_status === newAuditStatus ? null : newAuditStatus;
+    try {
+      await api.patch(`${API}/calendar/audit-status`, {
+        patient_id: selectedId,
+        regimen_id: t.regimen_id,
+        treatment_date: t.scheduled_date,
+        audit_status: actualStatus,
+      });
+      if (selectedId) loadDetail(selectedId);
+    } catch { /* ignore */ }
+  };
+
   const filtered = patients.filter(p =>
     !searchText || p.name?.includes(searchText) || p.patient_no?.includes(searchText) || p.furigana?.includes(searchText)
   );
@@ -513,6 +530,7 @@ export default function RegimenCheckPage() {
                           <TableCell sx={{ fontSize: '0.72rem', py: 0.5, bgcolor: '#eceff1', fontWeight: 'bold', whiteSpace: 'nowrap' }}>実施日</TableCell>
                           <TableCell sx={{ fontSize: '0.72rem', py: 0.5, bgcolor: '#eceff1', fontWeight: 'bold' }}>レジメン</TableCell>
                           <TableCell sx={{ fontSize: '0.72rem', py: 0.5, bgcolor: '#eceff1', fontWeight: 'bold' }}>Cycle</TableCell>
+                          <TableCell sx={{ fontSize: '0.72rem', py: 0.5, bgcolor: '#eceff1', fontWeight: 'bold' }}>監査</TableCell>
                           <TableCell sx={{ fontSize: '0.72rem', py: 0.5, bgcolor: '#eceff1', fontWeight: 'bold' }}>状態</TableCell>
                           <TableCell sx={{ fontSize: '0.72rem', py: 0.5, bgcolor: '#eceff1', fontWeight: 'bold' }}>抗腫瘍薬（オーダー）</TableCell>
                           <TableCell sx={{ fontSize: '0.72rem', py: 0.5, bgcolor: '#eceff1', fontWeight: 'bold' }}>支持療法</TableCell>
@@ -538,6 +556,34 @@ export default function RegimenCheckPage() {
                                 inputProps={{ min: 1, style: { textAlign: 'center' } }}
                                 sx={{ width: 56, '& .MuiInputBase-input': { fontSize: '0.75rem', py: 0.2, px: 0.5 } }}
                               />
+                            </TableCell>
+                            <TableCell sx={{ py: 0.2 }}>
+                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.4 }}>
+                                {t.audit_status === 'audited' ? (
+                                  <Chip label="監査済" size="small" color="success"
+                                    sx={{ fontSize: '0.62rem', height: 16 }} />
+                                ) : t.audit_status === 'doubt' ? (
+                                  <Chip label="疑義中" size="small" color="warning"
+                                    sx={{ fontSize: '0.62rem', height: 16 }} />
+                                ) : (
+                                  <Chip label="未監査" size="small"
+                                    sx={{ fontSize: '0.62rem', height: 16, bgcolor: '#f5f5f5', color: '#9e9e9e' }} />
+                                )}
+                                <Tooltip title={t.audit_status === 'audited' ? '未監査に戻す' : '監査済にする'}>
+                                  <IconButton size="small" color={t.audit_status === 'audited' ? 'success' : 'default'}
+                                    onClick={() => handleSetAuditStatus(t, 'audited')}
+                                    sx={{ p: 0.3 }}>
+                                    <CheckCircle sx={{ fontSize: 15 }} />
+                                  </IconButton>
+                                </Tooltip>
+                                <Tooltip title={t.audit_status === 'doubt' ? '未監査に戻す' : '疑義照会中にする'}>
+                                  <IconButton size="small" color={t.audit_status === 'doubt' ? 'warning' : 'default'}
+                                    onClick={() => handleSetAuditStatus(t, 'doubt')}
+                                    sx={{ p: 0.3 }}>
+                                    <Warning sx={{ fontSize: 15 }} />
+                                  </IconButton>
+                                </Tooltip>
+                              </Box>
                             </TableCell>
                             <TableCell sx={{ fontSize: '0.72rem', py: 0.4 }}>
                               <TreatmentStatusChip status={t.status} />

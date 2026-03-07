@@ -115,6 +115,8 @@ router.get('/:patientId/detail', async (req: AuthRequest, res: Response) => {
          st.regimen_id,
          rc.id AS calendar_id,
          rc.cycle_no,
+         rc.audit_status,
+         rc.status AS calendar_status,
          COALESCE(
            (SELECT STRING_AGG(
               po.drug_name || CASE WHEN po.dose IS NOT NULL
@@ -412,7 +414,7 @@ router.patch('/calendar/:id', async (req: AuthRequest, res: Response) => {
     const { rows } = await pool.query(
       `UPDATE regimen_calendar
        SET status = COALESCE($2, status),
-           audit_status = $3,
+           audit_status = COALESCE($3, audit_status),
            notes = COALESCE($4, notes),
            cycle_no = COALESCE($5, cycle_no)
        WHERE id = $1 RETURNING *`,
@@ -450,6 +452,83 @@ router.patch('/regimens/:id', async (req: AuthRequest, res: Response) => {
     res.json(rows[0]);
   } catch (e) {
     console.error('PATCH /regimens/:id error:', e);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// ── PATCH /api/regimen-check/calendar/audit-status ──────────
+// 監査ステータスの設定（監査済 → カレンダーに○を自動セット）
+router.patch('/calendar/audit-status', async (req: AuthRequest, res: Response) => {
+  try {
+    const { patient_id, regimen_id, treatment_date, audit_status } = req.body;
+    if (!patient_id || !regimen_id || !treatment_date) {
+      res.status(400).json({ error: 'patient_id, regimen_id, treatment_date required' }); return;
+    }
+    const { rows } = await pool.query(
+      `INSERT INTO regimen_calendar (patient_id, regimen_id, treatment_date, status, audit_status)
+       VALUES ($1, $2, $3, 'planned', $4)
+       ON CONFLICT (patient_id, regimen_id, treatment_date) DO UPDATE SET
+         audit_status = $4,
+         status = CASE
+           WHEN $4 = 'audited' AND (regimen_calendar.status IS NULL OR regimen_calendar.status = '')
+             THEN 'planned'
+           ELSE regimen_calendar.status
+         END
+       RETURNING *`,
+      [patient_id, regimen_id, treatment_date, audit_status]
+    );
+    res.json(rows[0]);
+  } catch (e) {
+    console.error('PATCH /calendar/audit-status error:', e);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// ── GET /api/regimen-check/calendar/audit-detail ─────────────
+// 右クリック監査記録ポップアップ用
+router.get('/calendar/audit-detail', async (req: AuthRequest, res: Response) => {
+  try {
+    const patient_id = Number(req.query.patient_id);
+    const date = req.query.date as string;
+    if (!patient_id || !date) {
+      res.status(400).json({ error: 'patient_id and date required' }); return;
+    }
+    const [patRes, auditRes, doubtRes, calRes] = await Promise.all([
+      pool.query(
+        `SELECT id, patient_no, name, department FROM patients WHERE id = $1`,
+        [patient_id]
+      ),
+      pool.query(
+        `SELECT id, audit_date, pharmacist_name, comment, handover_note, created_at
+         FROM regimen_audits
+         WHERE patient_id = $1 AND audit_date = $2
+         ORDER BY created_at DESC`,
+        [patient_id, date]
+      ),
+      pool.query(
+        `SELECT id, doubt_date, content, status, resolution, pharmacist_name
+         FROM regimen_doubts
+         WHERE patient_id = $1 AND (status = 'open' OR doubt_date = $2)
+         ORDER BY CASE WHEN status = 'open' THEN 0 ELSE 1 END, doubt_date DESC`,
+        [patient_id, date]
+      ),
+      pool.query(
+        `SELECT rc.id, rc.status, rc.audit_status, rc.cycle_no, r.name AS regimen_name
+         FROM regimen_calendar rc
+         JOIN regimens r ON r.id = rc.regimen_id
+         WHERE rc.patient_id = $1 AND rc.treatment_date = $2
+         ORDER BY r.name`,
+        [patient_id, date]
+      ),
+    ]);
+    res.json({
+      patient: patRes.rows[0] ?? null,
+      audits: auditRes.rows,
+      doubts: doubtRes.rows,
+      calendar: calRes.rows,
+    });
+  } catch (e) {
+    console.error('GET /calendar/audit-detail error:', e);
     res.status(500).json({ error: 'Server error' });
   }
 });

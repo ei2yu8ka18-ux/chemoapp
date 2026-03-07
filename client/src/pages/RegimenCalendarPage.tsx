@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   Box, Typography, Button, Chip, CircularProgress,
-  Tooltip, Alert, TextField, IconButton,
+  Tooltip, Alert, TextField, IconButton, Popover, Divider,
 } from '@mui/material';
 import { ChevronLeft, ChevronRight, Refresh, Edit as EditIcon, Check as CheckIcon, Close as CloseIcon } from '@mui/icons-material';
 import api from '../services/api';
@@ -32,6 +32,13 @@ interface PatientRow {
   regimen_ids: number[];  // (patient_id, regimen_name) でグループ化した全regimen_id
 }
 
+interface AuditDetail {
+  patient: { id: number; patient_no: string; name: string; department: string } | null;
+  audits: { id: number; audit_date: string; pharmacist_name: string; comment: string; handover_note: string; created_at: string }[];
+  doubts: { id: number; doubt_date: string; content: string; status: string; resolution: string | null; pharmacist_name: string }[];
+  calendar: { id: number; status: string | null; audit_status: string | null; cycle_no: number | null; regimen_name: string }[];
+}
+
 // ── ステータス定義 ────────────────────────────────────────────
 const STATUS_DEF: Record<string, { sym: string; label: string; color: string; bg: string }> = {
   planned:   { sym: '○', label: '予定',  color: '#1565c0', bg: '#e3f2fd' },
@@ -40,10 +47,11 @@ const STATUS_DEF: Record<string, { sym: string; label: string; color: string; bg
   cancelled: { sym: '×', label: '中止',  color: '#c62828', bg: '#ffebee' },
 };
 
-// クリックサイクル: null → planned → done → changed → cancelled → null
-const STATUS_CYCLE: (string | null)[] = [null, 'planned', 'done', 'changed', 'cancelled'];
+// クリックサイクル: planned → done → changed → cancelled → planned（ループ、消去なし）
+const STATUS_CYCLE: string[] = ['planned', 'done', 'changed', 'cancelled'];
 
-function nextStatus(cur: string | null): string | null {
+function nextStatus(cur: string | null): string {
+  if (!cur) return 'planned';
   const idx = STATUS_CYCLE.indexOf(cur);
   return STATUS_CYCLE[(idx + 1) % STATUS_CYCLE.length];
 }
@@ -143,6 +151,13 @@ export default function RegimenCalendarPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
+  // 右クリック監査詳細ポップアップ
+  const [contextMenu, setContextMenu] = useState<{
+    mouseX: number; mouseY: number; row: PatientRow; date: string;
+  } | null>(null);
+  const [auditDetail, setAuditDetail] = useState<AuditDetail | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+
   // entryMap: `${patient_id}-${regimen_name}-${date}` → entry
   const entryMap = useMemo(() => {
     const map = new Map<string, CalendarEntry>();
@@ -185,41 +200,32 @@ export default function RegimenCalendarPage() {
 
     try {
       if (existing?.id) {
-        // 既存レコード更新
+        // 既存レコード更新（audit_status は触らない）
         const res = await api.patch<CalendarEntry>(`${API}/calendar/${existing.id}`, {
           status: newStatus,
-          audit_status: null,
         });
         const updated = { ...res.data, patient_no: row.patient_no, patient_name: row.patient_name, department: row.department, regimen_name: row.regimen_name };
         setEntries(prev => prev.map(e => (e.id === existing.id ? updated : e)));
       } else if (existing && existing.id === null) {
-        // auto-entry (scheduled_treatments 由来) → DB に保存
-        if (newStatus) {
-          const res = await api.post<CalendarEntry>(`${API}/calendar`, {
-            patient_id: row.patient_id,
-            regimen_id: regimenId,
-            treatment_date: date,
-            status: newStatus,
-          });
-          const added = { ...res.data, patient_no: row.patient_no, patient_name: row.patient_name, department: row.department, regimen_name: row.regimen_name };
-          setEntries(prev => [...prev.filter(e => !(e.patient_id === row.patient_id && e.regimen_name === row.regimen_name && e.treatment_date === date && e.id === null)), added]);
-        } else {
-          // null に戻す → auto-entry に戻す（DBエントリは不要）
-          setEntries(prev => prev.filter(e => !(e.patient_id === row.patient_id && e.regimen_name === row.regimen_name && e.treatment_date === date)));
-          fetchData();
-        }
+        // auto-entry (scheduled_treatments 由来) → DB に保存（newStatus は常に非null）
+        const res = await api.post<CalendarEntry>(`${API}/calendar`, {
+          patient_id: row.patient_id,
+          regimen_id: regimenId,
+          treatment_date: date,
+          status: newStatus,
+        });
+        const added = { ...res.data, patient_no: row.patient_no, patient_name: row.patient_name, department: row.department, regimen_name: row.regimen_name };
+        setEntries(prev => [...prev.filter(e => !(e.patient_id === row.patient_id && e.regimen_name === row.regimen_name && e.treatment_date === date && e.id === null)), added]);
       } else {
-        // 新規作成
-        if (newStatus) {
-          const res = await api.post<CalendarEntry>(`${API}/calendar`, {
-            patient_id: row.patient_id,
-            regimen_id: regimenId,
-            treatment_date: date,
-            status: newStatus,
-          });
-          const added = { ...res.data, patient_no: row.patient_no, patient_name: row.patient_name, department: row.department, regimen_name: row.regimen_name };
-          setEntries(prev => [...prev, added]);
-        }
+        // 新規作成（newStatus は常に非null）
+        const res = await api.post<CalendarEntry>(`${API}/calendar`, {
+          patient_id: row.patient_id,
+          regimen_id: regimenId,
+          treatment_date: date,
+          status: newStatus,
+        });
+        const added = { ...res.data, patient_no: row.patient_no, patient_name: row.patient_name, department: row.department, regimen_name: row.regimen_name };
+        setEntries(prev => [...prev, added]);
       }
     } catch {
       fetchData();
@@ -248,6 +254,18 @@ export default function RegimenCalendarPage() {
       alert('レジメン名の変更に失敗しました');
     }
   };
+
+  // 右クリック → 監査詳細ポップアップ
+  const handleContextMenu = useCallback((e: React.MouseEvent, row: PatientRow, date: string) => {
+    e.preventDefault();
+    setContextMenu({ mouseX: e.clientX, mouseY: e.clientY, row, date });
+    setAuditDetail(null);
+    setDetailLoading(true);
+    api.get<AuditDetail>(`${API}/calendar/audit-detail`, { params: { patient_id: row.patient_id, date } })
+      .then(r => setAuditDetail(r.data))
+      .catch(() => {})
+      .finally(() => setDetailLoading(false));
+  }, []);
 
   const shiftMonth = (delta: number) => {
     setFromDate(toDateStr(addMonths(parseDate(fromDate), delta)));
@@ -309,7 +327,7 @@ export default function RegimenCalendarPage() {
               <Typography variant="caption">{def.label}</Typography>
             </Box>
           ))}
-          <Typography variant="caption" sx={{ color: '#888' }}>（クリック: ○→●→▲→×→消去）</Typography>
+          <Typography variant="caption" sx={{ color: '#888' }}>（左クリック: ○→●→▲→×→○　右クリック: 監査記録）</Typography>
         </Box>
       </Box>
 
@@ -414,6 +432,7 @@ export default function RegimenCalendarPage() {
                         <td
                           key={d}
                           onClick={() => handleCellClick(row, d)}
+                          onContextMenu={e => handleContextMenu(e, row, d)}
                           style={{
                             background: cellBg,
                             borderLeft: isToday ? '1px solid #ffa000' : d.slice(8) === '01' ? '1px solid #bbb' : '1px solid #e8e8e8',
@@ -446,6 +465,112 @@ export default function RegimenCalendarPage() {
           </table>
         </Box>
       )}
+
+      {/* ── 右クリック監査詳細ポップアップ ── */}
+      <Popover
+        open={Boolean(contextMenu)}
+        onClose={() => setContextMenu(null)}
+        anchorReference="anchorPosition"
+        anchorPosition={contextMenu ? { top: contextMenu.mouseY, left: contextMenu.mouseX } : undefined}
+        slotProps={{ paper: { sx: { maxHeight: 420, overflowY: 'auto' } } }}
+      >
+        <Box sx={{ p: 1.5, minWidth: 260, maxWidth: 380 }}>
+          {/* ヘッダー */}
+          <Typography variant="subtitle2" sx={{ fontWeight: 'bold', fontSize: '0.82rem' }}>
+            {contextMenu?.row.patient_no}　{contextMenu?.row.patient_name}
+          </Typography>
+          <Typography variant="caption" sx={{ color: '#666' }}>
+            {contextMenu?.date}　{contextMenu?.row.regimen_name}
+          </Typography>
+          <Divider sx={{ my: 0.8 }} />
+
+          {detailLoading && (
+            <Box sx={{ display: 'flex', justifyContent: 'center', py: 1 }}>
+              <CircularProgress size={18} />
+            </Box>
+          )}
+
+          {auditDetail && (
+            <>
+              {/* カレンダーステータス */}
+              {auditDetail.calendar.length > 0 && (
+                <Box sx={{ mb: 1 }}>
+                  <Typography variant="caption" sx={{ fontWeight: 'bold', color: '#1565c0', display: 'block', mb: 0.3 }}>
+                    カレンダー
+                  </Typography>
+                  {auditDetail.calendar.map(c => (
+                    <Box key={c.id} sx={{ display: 'flex', alignItems: 'center', gap: 0.6, mb: 0.3 }}>
+                      <Typography sx={{ fontSize: '0.78rem', color: statusColor(c.status), fontWeight: 'bold' }}>
+                        {statusSym(c.status)} {STATUS_DEF[c.status ?? '']?.label ?? '―'}
+                      </Typography>
+                      {c.cycle_no != null && (
+                        <Chip label={`Cycle ${c.cycle_no}`} size="small" sx={{ fontSize: '0.62rem', height: 16 }} />
+                      )}
+                      {c.audit_status === 'audited' && (
+                        <Chip label="監査済" size="small" color="success" sx={{ fontSize: '0.62rem', height: 16 }} />
+                      )}
+                      {c.audit_status === 'doubt' && (
+                        <Chip label="疑義照会中" size="small" color="warning" sx={{ fontSize: '0.62rem', height: 16 }} />
+                      )}
+                    </Box>
+                  ))}
+                </Box>
+              )}
+
+              {/* 監査記録 */}
+              {auditDetail.audits.length > 0 && (
+                <Box sx={{ mb: 1 }}>
+                  <Typography variant="caption" sx={{ fontWeight: 'bold', color: '#2e7d32', display: 'block', mb: 0.3 }}>
+                    📝 監査記録
+                  </Typography>
+                  {auditDetail.audits.map(a => (
+                    <Box key={a.id} sx={{ mb: 0.6, pl: 1, borderLeft: '2px solid #a5d6a7' }}>
+                      <Typography sx={{ fontSize: '0.68rem', color: '#888' }}>{a.audit_date}　{a.pharmacist_name}</Typography>
+                      <Typography sx={{ fontSize: '0.75rem' }}>{a.comment || '―'}</Typography>
+                      {a.handover_note && (
+                        <Typography sx={{ fontSize: '0.7rem', color: '#555' }}>申送: {a.handover_note}</Typography>
+                      )}
+                    </Box>
+                  ))}
+                </Box>
+              )}
+
+              {/* 疑義照会 */}
+              {auditDetail.doubts.length > 0 && (
+                <Box>
+                  <Typography variant="caption" sx={{ fontWeight: 'bold', color: '#b71c1c', display: 'block', mb: 0.3 }}>
+                    ❓ 疑義照会
+                  </Typography>
+                  {auditDetail.doubts.map(d => (
+                    <Box key={d.id} sx={{ mb: 0.6, pl: 1, borderLeft: '2px solid #ef9a9a' }}>
+                      <Box sx={{ display: 'flex', gap: 0.5, alignItems: 'center', mb: 0.2 }}>
+                        <Chip
+                          label={d.status === 'open' ? '未解決' : '解決済'}
+                          size="small"
+                          color={d.status === 'open' ? 'error' : 'default'}
+                          sx={{ fontSize: '0.62rem', height: 15 }}
+                        />
+                        <Typography sx={{ fontSize: '0.68rem', color: '#888' }}>{d.doubt_date}</Typography>
+                      </Box>
+                      <Typography sx={{ fontSize: '0.75rem' }}>{d.content}</Typography>
+                      {d.resolution && (
+                        <Typography sx={{ fontSize: '0.7rem', color: '#2e7d32' }}>✓ {d.resolution}</Typography>
+                      )}
+                    </Box>
+                  ))}
+                </Box>
+              )}
+
+              {/* 記録なし */}
+              {auditDetail.audits.length === 0 && auditDetail.doubts.length === 0 && auditDetail.calendar.length === 0 && (
+                <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.75rem' }}>
+                  この日の監査記録はありません
+                </Typography>
+              )}
+            </>
+          )}
+        </Box>
+      </Popover>
 
       {/* 統計サマリー */}
       {!loading && entries.length > 0 && (
