@@ -1,5 +1,5 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { Box, CircularProgress, Typography } from '@mui/material';
+import { Box, CircularProgress } from '@mui/material';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import LoginPage from './pages/LoginPage';
 import TreatmentListPage from './pages/TreatmentListPage';
@@ -10,6 +10,8 @@ import DiaryListPage from './pages/DiaryListPage';
 import MonthlyPage from './pages/MonthlyPage';
 import AnnualPage  from './pages/AnnualPage';
 import GuidancePage from './pages/GuidancePage';
+import RegimenCheckPage from './pages/RegimenCheckPage';
+import RegimenCalendarPage from './pages/RegimenCalendarPage';
 import InterventionReportPage from './pages/InterventionReportPage';
 import PasswordChangePage from './pages/PasswordChangePage';
 import PreConsultSettingsPage from './pages/PreConsultSettingsPage';
@@ -17,15 +19,6 @@ import DailySnapshotListPage from './pages/DailySnapshotListPage';
 import AuthLogsPage from './pages/AuthLogsPage';
 import Sidebar from './components/Sidebar';
 
-// 準備中ページ
-function ComingSoonPage({ title }: { title: string }) {
-  return (
-    <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '80vh', flexDirection: 'column', gap: 2 }}>
-      <Typography variant="h5" color="text.secondary">{title}</Typography>
-      <Typography color="text.secondary">準備中です</Typography>
-    </Box>
-  );
-}
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
   const { user, isLoading } = useAuth();
@@ -64,7 +57,10 @@ function AppRoutes() {
         <PrivateRoute><AppLayout><TreatmentListPage /></AppLayout></PrivateRoute>
       } />
       <Route path="/regimen" element={
-        <PrivateRoute><AppLayout><ComingSoonPage title="レジメン監査" /></AppLayout></PrivateRoute>
+        <PrivateRoute><AppLayout><RegimenCheckPage /></AppLayout></PrivateRoute>
+      } />
+      <Route path="/regimen-calendar" element={
+        <PrivateRoute><AppLayout><RegimenCalendarPage /></AppLayout></PrivateRoute>
       } />
       <Route path="/guidance" element={
         <PrivateRoute><AppLayout><GuidancePage /></AppLayout></PrivateRoute>

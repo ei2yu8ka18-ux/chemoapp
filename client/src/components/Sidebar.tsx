@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import React from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import {
   Drawer, List, ListItemButton, ListItemIcon, ListItemText,
@@ -8,7 +9,7 @@ import {
   CalendarToday, Assignment, MenuBook, Book,
   History, BarChart, TrendingUp, ManageAccounts, LibraryBooks,
   Summarize, Lock, TableChart, Settings, Login,
-  ChevronLeft, ChevronRight,
+  ChevronLeft, ChevronRight, DateRange,
 } from '@mui/icons-material';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -17,9 +18,10 @@ const COLLAPSED_WIDTH = 48;
 
 export { DRAWER_WIDTH };
 
-const NAV_ITEMS = [
+const NAV_ITEMS: { label: string; path: string; icon: React.ReactElement; disabled?: boolean }[] = [
   { label: '当日患者一覧',   path: '/',                     icon: <CalendarToday fontSize="small" /> },
-  { label: 'レジメン監査',   path: '/regimen',               icon: <Assignment fontSize="small" />,   disabled: true },
+  { label: 'レジメン監査',   path: '/regimen',               icon: <Assignment fontSize="small" /> },
+  { label: 'レジメンカレンダー', path: '/regimen-calendar',  icon: <DateRange fontSize="small" /> },
   { label: '点滴説明書',      path: '/guidance',              icon: <MenuBook fontSize="small" /> },
   { label: '業務日誌作成',   path: '/diary',                 icon: <Book fontSize="small" /> },
   { label: '業務日誌一覧',   path: '/diary-list',            icon: <LibraryBooks fontSize="small" /> },

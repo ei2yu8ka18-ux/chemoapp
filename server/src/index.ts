@@ -13,6 +13,7 @@ import dailySnapshotsRouter from './routes/daily-snapshots';
 import adminRouter from './routes/admin';
 import guidanceRouter  from './routes/guidance';
 import dwhSyncRouter   from './routes/dwh-sync';
+import regimenCheckRouter from './routes/regimen-check';
 
 dotenv.config();
 
@@ -47,6 +48,7 @@ app.use('/api/daily-snapshots',  dailySnapshotsRouter);
 app.use('/api/admin',            adminRouter);
 app.use('/api/guidance',         guidanceRouter);
 app.use('/api/dwh-sync',         dwhSyncRouter);
+app.use('/api/regimen-check',    regimenCheckRouter);
 
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
