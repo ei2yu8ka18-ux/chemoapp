@@ -6,7 +6,7 @@ import {
   DialogContent, DialogActions, IconButton, FormControlLabel,
   Checkbox, FormGroup, Snackbar, Alert,
 } from '@mui/material';
-import { Logout, Add, Remove, Save } from '@mui/icons-material';
+import { Logout, Add, Remove, Save, TableRows, Warning, InvertColors } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import api from '../services/api';
@@ -154,6 +154,10 @@ export default function TreatmentListPage() {
   const [autoBlood1, setAutoBlood1] = useState(false);
   const [autoBlood5, setAutoBlood5] = useState(false);
 
+  // DWH同期状態
+  const [syncingBlood, setSyncingBlood] = useState(false);
+  const [bloodSyncedAt, setBloodSyncedAt] = useState<string | null>(null);
+
   // 変更/中止ダイアログ
   const [dialog, setDialog] = useState<{
     id: number; status: TreatmentStatus; note: string; quickReasons: string[];
@@ -189,6 +193,23 @@ export default function TreatmentListPage() {
     }
   }, []);
 
+  // DWH採血・緊急処方同期 → PostgreSQL upsert → 画面リロード
+  const syncBlood = useCallback(async (date: string) => {
+    setSyncingBlood(true);
+    try {
+      await Promise.allSettled([
+        api.post(`/dwh-sync/blood?date=${date}`),
+        api.post(`/dwh-sync/urgent?date=${date}`),
+      ]);
+      setBloodSyncedAt(new Date().toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
+    } catch {
+      // 同期失敗時も画面データは更新する
+    } finally {
+      setSyncingBlood(false);
+      load(date);
+    }
+  }, [load]);
+
   // 初回: 設定 + データ読み込み
   useEffect(() => {
     api.get('/settings/pre-consult-departments')
@@ -203,13 +224,13 @@ export default function TreatmentListPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // 採血自動取込タイマー
+  // 採血自動取込タイマー（DWH同期→PostgreSQL→画面更新）
   useEffect(() => {
     if (!autoBlood1 && !autoBlood5) return;
     const intervalMs = autoBlood1 ? 60_000 : 300_000;
-    const timer = setInterval(() => { load(selectedDate); }, intervalMs);
+    const timer = setInterval(() => { syncBlood(selectedDate); }, intervalMs);
     return () => clearInterval(timer);
-  }, [autoBlood1, autoBlood5, load, selectedDate]);
+  }, [autoBlood1, autoBlood5, syncBlood, selectedDate]);
 
   // 同姓チェック
   const duplicateSurnames = useMemo(() => {
@@ -351,6 +372,7 @@ export default function TreatmentListPage() {
           {/* 一覧作成ボタン */}
           <Button size="small" color="inherit" variant="outlined"
             onClick={() => load(selectedDate)}
+            startIcon={<TableRows sx={{ fontSize: '0.85rem !important' }} />}
             sx={btnSx}>一覧作成</Button>
 
           {/* 保存ボタン */}
@@ -383,13 +405,29 @@ export default function TreatmentListPage() {
 
           <Button size="small" color="inherit" variant="outlined"
             onClick={() => alert('アレルギーチェック機能は電子カルテ連携後に実装予定です')}
+            startIcon={<Warning sx={{ fontSize: '0.85rem !important' }} />}
             sx={btnSx}>アレルギーチェック</Button>
 
-          {/* 採血情報 + 1分/5分 */}
+          {/* 採血情報ボタン（任意タイミング手動DWH取得） */}
+          <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+            <Button size="small" color="inherit" variant="outlined"
+              onClick={() => syncBlood(selectedDate)}
+              disabled={syncingBlood}
+              startIcon={syncingBlood
+                ? <CircularProgress size={10} color="inherit" />
+                : <InvertColors sx={{ fontSize: '0.85rem !important' }} />}
+              sx={btnSx}>採血情報</Button>
+            {bloodSyncedAt && (
+              <Typography sx={{ fontSize: '0.52rem', color: 'rgba(255,255,255,0.6)', lineHeight: 1.1 }}>
+                {bloodSyncedAt}
+              </Typography>
+            )}
+          </Box>
+
+          {/* 自動取込：1分/5分チェックボックス */}
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.25,
             border: '1px solid rgba(255,255,255,0.4)', borderRadius: 0.5, px: 0.5, py: 0.2 }}>
-            <Button size="small" color="inherit" onClick={() => load(selectedDate)}
-              sx={{ fontSize: '0.68rem', py: 0, px: 0.5, minWidth: 0, color: '#fff' }}>採血情報</Button>
+            <Typography sx={{ fontSize: '0.6rem', color: 'rgba(255,255,255,0.8)', mr: 0.25 }}>自動</Typography>
             <FormControlLabel
               control={
                 <Checkbox size="small" checked={autoBlood1}

@@ -143,7 +143,7 @@ function selectImage(code: string, rawName: string): string | null {
   if (/KN|ケーエヌ/i.test(rawName)) return 'kn1.png';
   if (/マンニトール/.test(rawName)) return 'mannitol.jpg';
   if (/ヘパリン/.test(rawName)) return 'hepa100.png';
-  if (/ブドウ糖/.test(rawName)) {
+  if (/ブドウ糖|糖液/.test(rawName)) {
     if (vol === 250) return 'tz250.png';
     if (vol === 500) return 'tz500.png';
     return 'tz100.png';
@@ -197,12 +197,21 @@ function parseOrderRows(rows: OrderRow[]): PatientSheet[] {
 
       let img: string | null = takeHome ? 'pomp.png' : null;
       if (!img) {
+        // 生食(ns*.png)より糖液・ソリタ等を優先して選択
+        let nsImg: string | null = null;
         for (const r of oRows) {
           if (skipLevo && /レボホリナート/.test(r.drug_name)) continue;
           const found = selectImage(r.drug_code, r.drug_name);
-          if (found) { img = found; break; }
+          if (found) {
+            if (found.startsWith('ns')) {
+              if (!nsImg) nsImg = found;   // 生食: 記憶しておき探索継続
+            } else {
+              img = found;                  // 非生食(糖液等): 優先採用
+              break;
+            }
+          }
         }
-        if (!img) img = 'ns100.png';
+        if (!img) img = nsImg ?? 'ns100.png';
       }
 
       const nameMap = new Map<string, boolean>(); // name → isHR

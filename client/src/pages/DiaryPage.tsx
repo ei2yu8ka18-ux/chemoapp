@@ -72,20 +72,29 @@ function NumCell({ value, onChange }: { value: number; onChange: (v: number) => 
   return (
     <TextField size="small" type="number" value={value}
       onChange={e => onChange(Number(e.target.value) || 0)}
-      inputProps={{ min: 0, style: { fontSize: '0.78rem', padding: '1px 4px', width: 44, textAlign: 'right' } }}
-      sx={{ '& .MuiOutlinedInput-root': { height: 24 } }} />
+      inputProps={{ min: 0, style: { fontSize: '0.75rem', padding: '1px 3px', width: 38, textAlign: 'right' } }}
+      sx={{ '& .MuiOutlinedInput-root': { height: 20 } }} />
   );
 }
 
 const TH = ({ children, w }: { children: React.ReactNode; w?: number }) => (
   <TableCell sx={{ border: '1px solid #bbb', bgcolor: '#ecf0f1', fontWeight: 'bold',
-    fontSize: '0.72rem', p: '3px 6px', whiteSpace: 'nowrap', width: w }}>
+    fontSize: '0.68rem', p: '1px 4px', whiteSpace: 'nowrap', width: w }}>
     {children}
   </TableCell>
 );
 const TD = ({ children, center, bold }: { children?: React.ReactNode; center?: boolean; bold?: boolean }) => (
-  <TableCell sx={{ border: '1px solid #ddd', fontSize: '0.78rem', p: '2px 6px',
+  <TableCell sx={{ border: '1px solid #ddd', fontSize: '0.75rem', p: '1px 4px',
     textAlign: center ? 'center' : 'left', fontWeight: bold ? 'bold' : 'normal' }}>
+    {children}
+  </TableCell>
+);
+const GH = ({ children, span, color }: { children: React.ReactNode; span?: number; color?: string }) => (
+  <TableCell colSpan={span ?? 1} sx={{
+    border: '1px solid #bbb', fontWeight: 'bold', fontSize: '0.65rem',
+    p: '1px 4px', textAlign: 'center', whiteSpace: 'nowrap',
+    bgcolor: color ?? '#ecf0f1',
+  }}>
     {children}
   </TableCell>
 );
@@ -338,133 +347,121 @@ export default function DiaryPage() {
           <Box className="print-right-top" sx={{ mb: { xs: 1.5, sm: 0 } }}>
 
           {/* 外来化学療法センター（点滴） */}
-          <Paper elevation={1} sx={{ p: 1, mb: { xs: 1.5, sm: 0 } }}>
-            <Typography sx={{ fontSize: '0.82rem', fontWeight: 'bold', mb: 0.5 }}>
+          <Paper elevation={1} sx={{ p: 0.75, mb: { xs: 1.5, sm: 0 } }}>
+            <Typography sx={{ fontSize: '0.78rem', fontWeight: 'bold', mb: 0.25 }}>
               ■ 外来化学療法センター（点滴）
             </Typography>
 
-            {/* 実施内容 */}
-            <Typography sx={{ fontSize: '0.75rem', color: '#555', mb: 0.25 }}>実施内容</Typography>
-            <Table size="small" sx={{ borderCollapse: 'collapse', mb: 0.5 }}>
-              <TableHead>
-                <TableRow>
-                  {['実施予定件数','実施件数','中止件数','変更件数'].map(h => <TH key={h}>{h}</TH>)}
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                <TableRow>
-                  {[auto?.inj_total, auto?.inj_done, auto?.inj_cancelled, auto?.inj_changed].map((v, i) => (
-                    <TD key={i} center bold>{v ?? 0}</TD>
-                  ))}
-                </TableRow>
-              </TableBody>
-            </Table>
+            {/* 実施内容 + 介入内容 横並び */}
+            <Box sx={{ display: 'flex', gap: 0.75, mb: 0.25, flexWrap: 'wrap', alignItems: 'flex-start' }}>
+              <Table size="small" sx={{ borderCollapse: 'collapse', width: 'auto' }}>
+                <TableHead>
+                  <TableRow><GH span={4} color="#d5e8d4">実施内容</GH></TableRow>
+                  <TableRow>{['予定','実施','中止','変更'].map(h => <TH key={h}>{h}</TH>)}</TableRow>
+                </TableHead>
+                <TableBody>
+                  <TableRow>
+                    {[auto?.inj_total, auto?.inj_done, auto?.inj_cancelled, auto?.inj_changed].map((v, i) => (
+                      <TD key={i} center bold>{v ?? 0}</TD>
+                    ))}
+                  </TableRow>
+                </TableBody>
+              </Table>
 
-            {/* 介入内容 */}
-            <Typography sx={{ fontSize: '0.75rem', color: '#555', mb: 0.25 }}>介入内容</Typography>
-            <Table size="small" sx={{ borderCollapse: 'collapse', mb: 0.5 }}>
-              <TableHead>
-                <TableRow>
-                  {['提案','疑義','問合せ','介入合計','処方変更あり'].map(h => <TH key={h}>{h}</TH>)}
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                <TableRow>
-                  <TD center>{auto?.propose_count ?? 0}</TD>
-                  <TD center>{auto?.doubt_count ?? 0}</TD>
-                  <TD center>{auto?.inquiry_count ?? 0}</TD>
-                  <TD center bold>{injIntTotal}</TD>
-                  <TD center>
-                    {auto?.presc_changed_count ?? 0}
-                    <Typography component="span" sx={{ fontSize: '0.68rem', color: '#777', ml: 0.25 }}>
-                      ({prescPct})
-                    </Typography>
-                  </TD>
-                </TableRow>
-              </TableBody>
-            </Table>
+              <Table size="small" sx={{ borderCollapse: 'collapse', width: 'auto' }}>
+                <TableHead>
+                  <TableRow><GH span={5} color="#dae8fc">介入内容</GH></TableRow>
+                  <TableRow>{['提案','疑義','問合','介入計','処変'].map(h => <TH key={h}>{h}</TH>)}</TableRow>
+                </TableHead>
+                <TableBody>
+                  <TableRow>
+                    <TD center>{auto?.propose_count ?? 0}</TD>
+                    <TD center>{auto?.doubt_count ?? 0}</TD>
+                    <TD center>{auto?.inquiry_count ?? 0}</TD>
+                    <TD center bold>{injIntTotal}</TD>
+                    <TD center>
+                      {auto?.presc_changed_count ?? 0}
+                      <Typography component="span" sx={{ fontSize: '0.6rem', color: '#777', ml: 0.25 }}>
+                        ({prescPct})
+                      </Typography>
+                    </TD>
+                  </TableRow>
+                </TableBody>
+              </Table>
+            </Box>
 
-            {/* 算定 */}
-            <Typography sx={{ fontSize: '0.75rem', color: '#555', mb: 0.25 }}>算定</Typography>
-            <Table size="small" sx={{ borderCollapse: 'collapse', mb: 0.75 }}>
-              <TableHead>
-                <TableRow>
-                  {['がん患者指導料ハ','診察前面談算定あり'].map(h => <TH key={h}>{h}</TH>)}
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                <TableRow>
-                  <TD center bold>{auto?.cancer_guidance_count ?? 0}</TD>
-                  <TD center bold>{auto?.pre_consultation_count ?? 0}</TD>
-                </TableRow>
-              </TableBody>
-            </Table>
+            {/* 算定 + 手動入力 横並び */}
+            <Box sx={{ display: 'flex', gap: 0.75, flexWrap: 'wrap', alignItems: 'center' }}>
+              <Table size="small" sx={{ borderCollapse: 'collapse', width: 'auto' }}>
+                <TableHead>
+                  <TableRow><GH span={2} color="#f8cecc">算定</GH></TableRow>
+                  <TableRow><TH>がん指導ハ</TH><TH>診察前</TH></TableRow>
+                </TableHead>
+                <TableBody>
+                  <TableRow>
+                    <TD center bold>{auto?.cancer_guidance_count ?? 0}</TD>
+                    <TD center bold>{auto?.pre_consultation_count ?? 0}</TD>
+                  </TableRow>
+                </TableBody>
+              </Table>
 
-            {/* 手動入力（初回指導等） */}
-            <Box sx={{ display: 'flex', gap: 1.5, flexWrap: 'wrap', mb: 0.75, alignItems: 'center' }}>
               {([
                 ['初回指導', 'first_visit_counseling'],
-                ['アレルギー中止', 'allergy_stop'],
-                ['レジメンチェック', 'regimen_check'],
+                ['アレ中止', 'allergy_stop'],
+                ['レジチェック', 'regimen_check'],
                 ['レジメン操作', 'regimen_operation'],
               ] as [string, keyof DiaryManual][]).map(([lbl, key]) => (
-                <Box key={key} sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                  <Typography sx={{ fontSize: '0.72rem' }}>{lbl}：</Typography>
+                <Box key={key} sx={{ display: 'flex', alignItems: 'center', gap: 0.25 }}>
+                  <Typography sx={{ fontSize: '0.68rem', whiteSpace: 'nowrap' }}>{lbl}：</Typography>
                   <NumCell value={manual[key] as number} onChange={v => setM(key, v)} />
                 </Box>
               ))}
             </Box>
-
           </Paper>
 
           {/* 外来化学療法センター（内服） */}
-          <Paper elevation={1} sx={{ p: 1 }}>
-            <Typography sx={{ fontSize: '0.82rem', fontWeight: 'bold', mb: 0.25 }}>
+          <Paper elevation={1} sx={{ p: 0.75 }}>
+            <Typography sx={{ fontSize: '0.78rem', fontWeight: 'bold', mb: 0.25 }}>
               ■ 外来化学療法センター（内服）
             </Typography>
 
-            {/* 実施内容 */}
-            <Typography sx={{ fontSize: '0.75rem', color: '#555', mb: 0.25 }}>実施内容</Typography>
-            <Table size="small" sx={{ borderCollapse: 'collapse', mb: 0.5 }}>
-              <TableHead>
-                <TableRow>
-                  {['実施予定件数','実施件数','中止件数','変更件数','患者指導','初回指導'].map(h => (
-                    <TH key={h}>{h}</TH>
-                  ))}
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                <TableRow>
-                  {(['oral_scheduled','oral_done','oral_cancelled','oral_changed',
-                    'oral_patient_counseling','oral_first_visit',
-                  ] as (keyof DiaryManual)[]).map(k => (
-                    <TableCell key={k} sx={{ border: '1px solid #ddd', p: '2px 3px' }}>
-                      <NumCell value={manual[k] as number} onChange={v => setM(k, v)} />
-                    </TableCell>
-                  ))}
-                </TableRow>
-              </TableBody>
-            </Table>
+            {/* 実施内容 + 介入内容 横並び */}
+            <Box sx={{ display: 'flex', gap: 0.75, flexWrap: 'wrap', alignItems: 'flex-start' }}>
+              <Table size="small" sx={{ borderCollapse: 'collapse', width: 'auto' }}>
+                <TableHead>
+                  <TableRow><GH span={6} color="#d5e8d4">実施内容</GH></TableRow>
+                  <TableRow>{['予定','実施','中止','変更','患者指導','初回指導'].map(h => <TH key={h}>{h}</TH>)}</TableRow>
+                </TableHead>
+                <TableBody>
+                  <TableRow>
+                    {(['oral_scheduled','oral_done','oral_cancelled','oral_changed',
+                      'oral_patient_counseling','oral_first_visit',
+                    ] as (keyof DiaryManual)[]).map(k => (
+                      <TableCell key={k} sx={{ border: '1px solid #ddd', p: '1px 3px' }}>
+                        <NumCell value={manual[k] as number} onChange={v => setM(k, v)} />
+                      </TableCell>
+                    ))}
+                  </TableRow>
+                </TableBody>
+              </Table>
 
-            {/* 介入内容 */}
-            <Typography sx={{ fontSize: '0.75rem', color: '#555', mb: 0.25 }}>介入内容</Typography>
-            <Table size="small" sx={{ borderCollapse: 'collapse' }}>
-              <TableHead>
-                <TableRow>
-                  {['提案','疑義','問合せ','介入合計'].map(h => <TH key={h}>{h}</TH>)}
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                <TableRow>
-                  {(['oral_propose','oral_doubt','oral_inquiry'] as (keyof DiaryManual)[]).map(k => (
-                    <TableCell key={k} sx={{ border: '1px solid #ddd', p: '2px 3px' }}>
-                      <NumCell value={manual[k] as number} onChange={v => setM(k, v)} />
-                    </TableCell>
-                  ))}
-                  <TD center bold>{oralTotal}</TD>
-                </TableRow>
-              </TableBody>
-            </Table>
+              <Table size="small" sx={{ borderCollapse: 'collapse', width: 'auto' }}>
+                <TableHead>
+                  <TableRow><GH span={4} color="#dae8fc">介入内容</GH></TableRow>
+                  <TableRow>{['提案','疑義','問合','介入計'].map(h => <TH key={h}>{h}</TH>)}</TableRow>
+                </TableHead>
+                <TableBody>
+                  <TableRow>
+                    {(['oral_propose','oral_doubt','oral_inquiry'] as (keyof DiaryManual)[]).map(k => (
+                      <TableCell key={k} sx={{ border: '1px solid #ddd', p: '1px 3px' }}>
+                        <NumCell value={manual[k] as number} onChange={v => setM(k, v)} />
+                      </TableCell>
+                    ))}
+                    <TD center bold>{oralTotal}</TD>
+                  </TableRow>
+                </TableBody>
+              </Table>
+            </Box>
           </Paper>
 
           </Box>{/* end print-right-top */}
