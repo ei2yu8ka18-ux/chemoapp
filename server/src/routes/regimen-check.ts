@@ -473,20 +473,24 @@ router.patch('/calendar/audit-status', async (req: AuthRequest, res: Response) =
     if (!patient_id || !regimen_id || !treatment_date) {
       res.status(400).json({ error: 'patient_id, regimen_id, treatment_date required' }); return;
     }
+    // treatment_date を文字列に正規化（Date オブジェクト対策）
+    const dateStr = typeof treatment_date === 'string'
+      ? treatment_date.slice(0, 10)
+      : new Date(treatment_date).toISOString().slice(0, 10);
     const { rows } = await pool.query(
       `INSERT INTO regimen_calendar (patient_id, regimen_id, treatment_date, status, audit_status, auditor_name, audited_at)
-       VALUES ($1, $2, $3, 'planned', $4, $5, CASE WHEN $4 IS NOT NULL THEN NOW() ELSE NULL END)
+       VALUES ($1, $2, $3, 'planned', $4::text, $5::text, CASE WHEN $4::text IS NOT NULL THEN NOW() ELSE NULL END)
        ON CONFLICT (patient_id, regimen_id, treatment_date) DO UPDATE SET
-         audit_status = $4,
-         auditor_name = CASE WHEN $4 IS NOT NULL THEN $5 ELSE NULL END,
-         audited_at   = CASE WHEN $4 IS NOT NULL THEN NOW() ELSE NULL END,
+         audit_status = $4::text,
+         auditor_name = CASE WHEN $4::text IS NOT NULL THEN $5::text ELSE NULL END,
+         audited_at   = CASE WHEN $4::text IS NOT NULL THEN NOW() ELSE NULL END,
          status = CASE
-           WHEN $4 = 'audited' AND (regimen_calendar.status IS NULL OR regimen_calendar.status = '')
+           WHEN $4::text = 'audited' AND (regimen_calendar.status IS NULL OR regimen_calendar.status = '')
              THEN 'planned'
            ELSE regimen_calendar.status
          END
        RETURNING *`,
-      [patient_id, regimen_id, treatment_date, audit_status, auditor_name || null]
+      [patient_id, regimen_id, dateStr, audit_status ?? null, auditor_name ?? null]
     );
     res.json(rows[0]);
   } catch (e) {
