@@ -70,9 +70,22 @@ router.patch('/:id/status', async (req: AuthRequest, res: Response) => {
          status_changed_at = NOW(),
          updated_at = NOW()
      WHERE id = $3
-     RETURNING id, status, status_note, status_changed_at`,
+     RETURNING id, patient_id, regimen_id, scheduled_date, status, status_note, status_changed_at`,
     [status, note ?? null, id]
   );
+
+  if (rows[0]) {
+    // レジメンカレンダーにも連動: done→● changed→▲ cancelled→× pending→○(planned)
+    const calStatus = status === 'pending' ? 'planned' : status;
+    await pool.query(
+      `UPDATE regimen_calendar
+       SET status = $1, updated_at = NOW()
+       WHERE patient_id = $2
+         AND regimen_id = $3
+         AND treatment_date = $4`,
+      [calStatus, rows[0].patient_id, rows[0].regimen_id, rows[0].scheduled_date]
+    );
+  }
 
   res.json(rows[0]);
 });

@@ -42,6 +42,9 @@ interface Order {
   dose_unit: string | null; route: string | null; is_antineoplastic: boolean;
   bag_no: number | null; solvent_name: string | null; solvent_vol_ml: number | null;
   bag_order: number; regimen_name: string | null;
+  rp_no: number | null;        // Rp番号（グルーピングキー）
+  route_label: string | null;  // 投与経路ラベル
+  order_no: string | null;     // オーダー番号
 }
 interface TreatmentHistory {
   id: number; scheduled_date: string; status: string; regimen_name: string;
@@ -56,6 +59,14 @@ interface FutureSchedule { order_date: string; antineoplastic_drugs: string; }
 interface Audit { id: number; audit_date: string; pharmacist_name: string; comment: string; handover_note: string; created_at: string; }
 interface Doubt { id: number; doubt_date: string; content: string; status: string; resolution: string | null; pharmacist_name: string; resolved_at: string | null; }
 interface InfectionLab { test_name: string; result: string; test_date: string; }
+interface ToxicityRule {
+  toxicity_item: string;
+  grade1_action: string;
+  grade2_action: string;
+  grade3_action: string;
+  grade4_action: string;
+  regimen_name: string;
+}
 interface Detail {
   patient: Patient & { latest_vital: Vital | null };
   vitals: Vital[];
@@ -68,6 +79,7 @@ interface Detail {
   audits: Audit[];
   doubts: Doubt[];
   infectionLabs: InfectionLab[];
+  toxicityRules?: ToxicityRule[];
 }
 
 /* ─── ユーティリティ ─────────────────────────────────────── */
@@ -272,15 +284,15 @@ function AuditStatusChip({ status }: { status: string | null }) {
   return <Chip label="未監査" size="small" sx={{ bgcolor: '#fff9c4', color: '#f57f17', fontSize: '0.62rem', height: 16, fontWeight: 'bold' }} />;
 }
 
-/* ─── オーダー点滴説明書形式表示（バッグ別） ──────────────── */
-const BAG_NUMS = ['①', '②', '③', '④', '⑤', '⑥', '⑦', '⑧', '⑨', '⑩'];
+/* ─── Rp別オーダー表示（点滴説明書形式） ──────────────── */
+const RP_NUMS = ['Rp①', 'Rp②', 'Rp③', 'Rp④', 'Rp⑤', 'Rp⑥', 'Rp⑦', 'Rp⑧', 'Rp⑨', 'Rp⑩'];
 
 function OrderColumn({
   orders, label, dateStr, onReload, compareOrders,
 }: {
   orders: Order[]; label: string; dateStr: string;
   onReload?: () => void;
-  compareOrders?: Order[];  // 比較用（dose 差異チェック）
+  compareOrders?: Order[];
 }) {
   const [doseEdits, setDoseEdits] = useState<Record<number, string>>({});
 
@@ -302,21 +314,31 @@ function OrderColumn({
     </Box>
   );
 
-  // レジメン名（最初のオーダーから取得）
   const regimenName = orders.find(o => o.regimen_name)?.regimen_name || '';
 
-  // バッグあり → bag_no でグループ化
-  const bagOrders = orders.filter(o => o.bag_no != null);
-  const noBagOrders = orders.filter(o => o.bag_no == null);
+  // --- Rp グループ化: rp_no → drugs[] ---
+  // rp_no がある → rp_no でグループ化
+  // rp_no がない、bag_no がある → bag_no+1 を仮 rp_no とする
+  // どちらもない → 皮下注・経口等（グループ外）
+  const getGroupKey = (o: Order): number | null => {
+    if (o.rp_no != null) return o.rp_no;
+    if (o.bag_no != null) return o.bag_no + 1;
+    return null;
+  };
 
-  // bag_no ごとにグループ化してソート
-  const bagGroups: Record<number, Order[]> = {};
-  for (const o of bagOrders) {
-    const k = o.bag_no as number;
-    if (!bagGroups[k]) bagGroups[k] = [];
-    bagGroups[k].push(o);
+  const rpGroups: Record<number, Order[]> = {};
+  const noBagOrders: Order[] = [];
+
+  for (const o of orders) {
+    const k = getGroupKey(o);
+    if (k == null) {
+      noBagOrders.push(o);
+    } else {
+      if (!rpGroups[k]) rpGroups[k] = [];
+      rpGroups[k].push(o);
+    }
   }
-  const sortedBagNos = Object.keys(bagGroups).map(Number).sort((a, b) => a - b);
+  const sortedRpNos = Object.keys(rpGroups).map(Number).sort((a, b) => a - b);
 
   // 比較用 drug_name → dose マップ
   const compareMap: Record<string, number | null> = {};
@@ -324,7 +346,7 @@ function OrderColumn({
     for (const o of compareOrders) { compareMap[o.drug_name] = o.dose ?? null; }
   }
 
-  const renderDrugRow = (o: Order, indent: boolean) => {
+  const renderDrugRow = (o: Order) => {
     const editing = doseEdits[o.id] !== undefined;
     const compareDose = compareMap[o.drug_name];
     const hasDiff = compareOrders !== undefined
@@ -332,8 +354,7 @@ function OrderColumn({
       && compareDose !== (o.dose ?? null);
     return (
       <Box key={o.id} sx={{
-        display: 'flex', alignItems: 'center', gap: 0.5, py: 0.15,
-        pl: indent ? 2.5 : 0.3,
+        display: 'flex', alignItems: 'center', gap: 0.5, py: 0.15, pl: 2,
       }}>
         {hasDiff && <Warning sx={{ fontSize: 11, color: '#f57f17', flexShrink: 0 }} />}
         <Typography sx={{
@@ -359,7 +380,7 @@ function OrderColumn({
             },
           }}
         />
-        <Typography sx={{ fontSize: '0.68rem', color: '#666', whiteSpace: 'nowrap', minWidth: 24 }}>
+        <Typography sx={{ fontSize: '0.68rem', color: '#666', whiteSpace: 'nowrap', minWidth: 28 }}>
           {o.dose_unit ?? ''}
         </Typography>
       </Box>
@@ -377,39 +398,53 @@ function OrderColumn({
         </Typography>
       )}
       <Paper variant="outlined" sx={{ p: 0.8 }}>
-        {/* バッグあり（点滴説明書形式） */}
-        {sortedBagNos.map((bagNo, idx) => {
-          const drugs = bagGroups[bagNo];
-          const solvent = drugs.find(o => o.solvent_name);
-          const bagSymbol = BAG_NUMS[idx] ?? `(${bagNo})`;
+
+        {/* ── Rp グループ（点滴説明書形式） ── */}
+        {sortedRpNos.map((rpNo, idx) => {
+          const drugs = rpGroups[rpNo].sort((a, b) => a.bag_order - b.bag_order);
+          // 投与経路ラベル（最初の薬品から取得）
+          const routeLbl = drugs.find(o => o.route_label)?.route_label
+            || drugs.find(o => o.route)?.route
+            || '';
+          // 溶媒（solvent_name を持つ最初の薬品）
+          const solventDrug = drugs.find(o => o.solvent_name);
+          const rpLabel = RP_NUMS[idx] ?? `Rp${idx + 1}`;
+
           return (
-            <Box key={bagNo} sx={{ mb: 0.8 }}>
-              {/* 溶媒ヘッダー */}
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, borderBottom: '1px solid #e0e0e0', pb: 0.2, mb: 0.15 }}>
-                <Typography sx={{ fontSize: '0.78rem', fontWeight: 'bold', color: '#37474f', flexShrink: 0 }}>
-                  {bagSymbol}
+            <Box key={rpNo} sx={{ mb: 1, pb: 0.5, borderBottom: idx < sortedRpNos.length - 1 ? '1px solid #e8e8e8' : 'none' }}>
+              {/* Rp番号 + 投与経路ヘッダー */}
+              <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 0.5, mb: 0.2 }}>
+                <Typography sx={{ fontSize: '0.75rem', fontWeight: 'bold', color: '#1565c0', flexShrink: 0 }}>
+                  {rpLabel}
                 </Typography>
-                {solvent ? (
-                  <Typography sx={{ fontSize: '0.73rem', color: '#37474f' }}>
-                    {solvent.solvent_name}{solvent.solvent_vol_ml ? `　${solvent.solvent_vol_ml}mL` : ''}
-                  </Typography>
-                ) : (
-                  <Typography sx={{ fontSize: '0.73rem', color: '#888' }}>（溶媒未登録）</Typography>
-                )}
+                <Typography sx={{ fontSize: '0.68rem', color: '#555', fontStyle: 'italic' }}>
+                  {routeLbl}
+                </Typography>
               </Box>
-              {/* このバッグの薬品 */}
-              {drugs.sort((a, b) => a.bag_order - b.bag_order).map(o => renderDrugRow(o, true))}
+              {/* 溶媒ライン（あれば） */}
+              {solventDrug && (
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, py: 0.1, pl: 1.5, bgcolor: '#f0f4ff', borderRadius: 0.5, mb: 0.15 }}>
+                  <Typography sx={{ fontSize: '0.72rem', color: '#37474f', fontWeight: 'bold', flex: 1 }}>
+                    {solventDrug.solvent_name}
+                  </Typography>
+                  <Typography sx={{ fontSize: '0.7rem', color: '#555', whiteSpace: 'nowrap' }}>
+                    {solventDrug.solvent_vol_ml ? `${solventDrug.solvent_vol_ml}mL` : ''}
+                  </Typography>
+                </Box>
+              )}
+              {/* 薬品リスト */}
+              {drugs.map(o => renderDrugRow(o))}
             </Box>
           );
         })}
 
-        {/* バッグなし（皮下注・経口等） */}
+        {/* ── バッグなし（皮下注・経口等） ── */}
         {noBagOrders.length > 0 && (
-          <Box sx={{ mt: sortedBagNos.length > 0 ? 0.8 : 0, borderTop: sortedBagNos.length > 0 ? '1px dashed #ccc' : undefined, pt: sortedBagNos.length > 0 ? 0.5 : 0 }}>
-            {sortedBagNos.length > 0 && (
+          <Box sx={{ mt: sortedRpNos.length > 0 ? 0.5 : 0, borderTop: sortedRpNos.length > 0 ? '1px dashed #ccc' : undefined, pt: sortedRpNos.length > 0 ? 0.5 : 0 }}>
+            {sortedRpNos.length > 0 && (
               <Typography sx={{ fontSize: '0.65rem', color: '#888', mb: 0.3 }}>その他（皮下注・経口等）</Typography>
             )}
-            {noBagOrders.map(o => renderDrugRow(o, false))}
+            {noBagOrders.map(o => renderDrugRow(o))}
           </Box>
         )}
       </Paper>
@@ -427,7 +462,7 @@ function SectionHeader({ color, children }: { color: string; children: React.Rea
 }
 
 /* ─── メインコンポーネント ──────────────────────────────── */
-export default function RegimenCheckPage() {
+export default function RegimenCheckPage({ filterUnaudited = false }: { filterUnaudited?: boolean }) {
   const { user } = useAuth();
   const location = useLocation();
   const [patients, setPatients] = useState<Patient[]>([]);
@@ -521,9 +556,14 @@ export default function RegimenCheckPage() {
 
   const handleResolveDoubt = async () => {
     if (!resolveDialog) return;
-    await api.patch(`${API}/doubts/${resolveDialog.id}`, { status: 'resolved', resolution });
-    setResolveDialog(null); setResolution('');
-    if (selectedId) loadDetail(selectedId);
+    try {
+      await api.patch(`${API}/doubts/${resolveDialog.id}`, { status: 'resolved', resolution });
+      setResolveDialog(null); setResolution('');
+      if (selectedId) { await loadDetail(selectedId); await loadPatients(); }
+    } catch (e) {
+      console.error('疑義解決エラー:', e);
+      setError('疑義照会の解決に失敗しました');
+    }
   };
 
   const handleReopenDoubt = async (d: Doubt) => {
@@ -607,9 +647,10 @@ export default function RegimenCheckPage() {
     }
   };
 
-  const filtered = patients.filter(p =>
-    !searchText || p.name?.includes(searchText) || p.patient_no?.includes(searchText) || p.furigana?.includes(searchText)
-  );
+  const filtered = patients.filter(p => {
+    if (filterUnaudited && p.doubt_count === 0 && p.unaudited_count === 0) return false;
+    return !searchText || p.name?.includes(searchText) || p.patient_no?.includes(searchText) || p.furigana?.includes(searchText);
+  });
 
   const p = detail?.patient;
   const age = p ? calcAge(p.dob) : null;
@@ -639,13 +680,92 @@ export default function RegimenCheckPage() {
     return marks;
   }, [detail?.treatmentHistory, detail?.labs]);
 
+  // HBVDNA 3ヶ月再検査ワーニング
+  // HBs抗原陽性 OR HBc抗体陽性 OR HBs抗体陽性 → HBVDNA を3ヶ月ごとにフォロー
+  const hbvDnaWarning = useMemo((): string | null => {
+    if (!detail?.infectionLabs?.length) return null;
+    const labs = detail.infectionLabs;
+    const isAtRisk = labs.some(l =>
+      (l.test_name === 'HBs抗原' || l.test_name === 'HBc抗体' || l.test_name === 'HBs抗体') &&
+      l.result.includes('陽性')
+    );
+    if (!isAtRisk) return null;
+    const hbvDna = labs.find(l => l.test_name === 'HBVDNA定量');
+    if (!hbvDna) return '⚠️ HBVDNA未検査';
+    const testDate = new Date(hbvDna.test_date);
+    const today = new Date();
+    const diffDays = Math.floor((today.getTime() - testDate.getTime()) / (1000 * 60 * 60 * 24));
+    if (diffDays >= 90) return `⚠️ HBVDNA ${diffDays}日未再検`;
+    return null;
+  }, [detail?.infectionLabs]);
+
+  // レジメン減量基準ワーニング（最新採血値をCTCAE基準で判定）
+  const toxicityWarnings = useMemo(() => {
+    if (!detail?.toxicityRules?.length || !detail.labs.length) return [];
+    const latest = detail.labs[detail.labs.length - 1];
+
+    const getGrade = (item: string): number => {
+      switch (item) {
+        case 'ANC': {
+          const v = latest.anc != null ? Number(latest.anc) : null;
+          if (v === null) return 0;
+          if (v < 0.5) return 4; if (v < 1.0) return 3; if (v < 1.5) return 2; return 1;
+        }
+        case 'Plt': {
+          // plt は ×10⁴/μL 単位（5.0 = 50,000/μL）
+          const v = latest.plt != null ? Number(latest.plt) : null;
+          if (v === null) return 0;
+          if (v < 2.5) return 4; if (v < 5.0) return 3; if (v < 7.5) return 2; return 1;
+        }
+        case 'AST': {
+          const v = latest.ast != null ? Number(latest.ast) : null;
+          if (v === null) return 0;
+          if (v > 120) return 3; if (v > 40) return 2; return 1;
+        }
+        case 'ALT': {
+          const v = latest.alt != null ? Number(latest.alt) : null;
+          if (v === null) return 0;
+          if (v > 120) return 3; if (v > 40) return 2; return 1;
+        }
+        case 'Cre': {
+          // eGFR で判定
+          const v = latest.egfr != null ? Number(latest.egfr) : null;
+          if (v === null) return 0;
+          if (v < 30) return 3; if (v < 60) return 2; return 1;
+        }
+        default:
+          return 0; // 末梢神経障害・皮膚障害等はラボ値では判定不可
+      }
+    };
+
+    return detail.toxicityRules
+      .filter(r => getGrade(r.toxicity_item) >= 2)
+      .map(r => {
+        const grade = getGrade(r.toxicity_item);
+        const action = grade === 4 ? r.grade4_action : grade === 3 ? r.grade3_action : r.grade2_action;
+        const labValue = (() => {
+          switch (r.toxicity_item) {
+            case 'ANC': return `ANC ${latest.anc} ×10³/μL`;
+            case 'Plt': return `Plt ${latest.plt} ×10⁴/μL`;
+            case 'AST': return `AST ${latest.ast} U/L`;
+            case 'ALT': return `ALT ${latest.alt} U/L`;
+            case 'Cre': return `eGFR ${latest.egfr} mL/min`;
+            default: return r.toxicity_item;
+          }
+        })();
+        return { item: r.toxicity_item, grade, action, labValue };
+      });
+  }, [detail?.toxicityRules, detail?.labs]);
+
   return (
     <Box sx={{ display: 'flex', height: '100vh', overflow: 'hidden' }}>
 
       {/* ── 左パネル：患者一覧 ── */}
       <Box sx={{ width: 220, flexShrink: 0, borderRight: '1px solid #ddd', display: 'flex', flexDirection: 'column', bgcolor: '#fafafa' }}>
         <Box sx={{ p: 1, borderBottom: '1px solid #ddd' }}>
-          <Typography variant="subtitle2" sx={{ fontWeight: 'bold', mb: 0.5, fontSize: '0.82rem' }}>レジメン監査</Typography>
+          <Typography variant="subtitle2" sx={{ fontWeight: 'bold', mb: 0.5, fontSize: '0.82rem' }}>
+            {filterUnaudited ? '🔴 レジメン監査未' : '📋 レジメン監査全一覧'}
+          </Typography>
           <TextField
             size="small" fullWidth placeholder="患者名・ID検索"
             value={searchText} onChange={e => setSearchText(e.target.value)}
@@ -698,12 +818,14 @@ export default function RegimenCheckPage() {
               {p.gender && <Chip label={p.gender} size="small" color={p.gender === '男性' ? 'info' : 'secondary'} sx={{ fontSize: '0.7rem' }} />}
               <Chip label={p.department} size="small" variant="outlined" sx={{ fontSize: '0.7rem' }} />
               <Chip label={`Dr. ${p.doctor}`} size="small" variant="outlined" sx={{ fontSize: '0.7rem' }} />
-              {p.latest_vital && (
-                <Box sx={{ ml: 'auto', display: 'flex', gap: 0.8 }}>
-                  <Chip label={`身長 ${p.latest_vital.height_cm}cm`} size="small" sx={{ bgcolor: '#e8f5e9', fontSize: '0.7rem' }} />
-                  <Chip label={`体重 ${p.latest_vital.weight_kg}kg`} size="small" sx={{ bgcolor: '#e8f5e9', fontSize: '0.7rem' }} />
-                  {p.latest_vital.bsa && <Chip label={`BSA ${p.latest_vital.bsa}m²`} size="small" sx={{ bgcolor: '#fff9c4', fontSize: '0.7rem' }} />}
-                </Box>
+              {p.latest_vital?.height_cm && (
+                <Chip label={`身長 ${p.latest_vital.height_cm}cm`} size="small" sx={{ bgcolor: '#e8f5e9', fontSize: '0.7rem' }} />
+              )}
+              {p.latest_vital?.weight_kg && (
+                <Chip label={`体重 ${p.latest_vital.weight_kg}kg`} size="small" sx={{ bgcolor: '#e8f5e9', fontSize: '0.7rem' }} />
+              )}
+              {p.latest_vital?.bsa && (
+                <Chip label={`BSA ${p.latest_vital.bsa}m²`} size="small" sx={{ bgcolor: '#fff9c4', fontSize: '0.7rem' }} />
               )}
             </Box>
 
@@ -732,6 +854,16 @@ export default function RegimenCheckPage() {
                     </Tooltip>
                   );
                 })}
+                {hbvDnaWarning && (
+                  <Chip
+                    label={hbvDnaWarning}
+                    size="small"
+                    sx={{
+                      fontSize: '0.65rem', height: 20, flexShrink: 0,
+                      bgcolor: '#ff6f00', color: '#fff', fontWeight: 'bold',
+                    }}
+                  />
+                )}
               </Box>
             )}
 
@@ -792,6 +924,30 @@ export default function RegimenCheckPage() {
 
         {!loading && detail && (
           <Box sx={{ flexGrow: 1, overflow: 'auto', p: 1.5 }}>
+
+            {/* ━━━━ 減量基準ワーニング ━━━━ */}
+            {toxicityWarnings.length > 0 && (
+              <Alert severity="warning" sx={{ mb: 1.5, py: 0.5 }}
+                icon={<Warning sx={{ fontSize: 18 }} />}>
+                <Typography sx={{ fontSize: '0.78rem', fontWeight: 'bold', mb: 0.5 }}>
+                  ⚠️ 減量基準に該当する項目があります（{detail.toxicityRules?.[0]?.regimen_name}）
+                </Typography>
+                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.8 }}>
+                  {toxicityWarnings.map(w => (
+                    <Box key={w.item} sx={{
+                      bgcolor: w.grade >= 3 ? '#ffebee' : '#fff8e1',
+                      border: `1px solid ${w.grade >= 3 ? '#ef9a9a' : '#ffe082'}`,
+                      borderRadius: 1, px: 1, py: 0.4,
+                    }}>
+                      <Typography sx={{ fontSize: '0.72rem', fontWeight: 'bold', color: w.grade >= 3 ? '#c62828' : '#e65100' }}>
+                        Grade {w.grade}: {w.item}（{w.labValue}）
+                      </Typography>
+                      <Typography sx={{ fontSize: '0.7rem', color: '#555' }}>→ {w.action}</Typography>
+                    </Box>
+                  ))}
+                </Box>
+              </Alert>
+            )}
 
             {/* ━━━━ ① 治療歴 ━━━━ */}
             <Paper variant="outlined" sx={{ mb: 1.5, overflow: 'hidden' }}>

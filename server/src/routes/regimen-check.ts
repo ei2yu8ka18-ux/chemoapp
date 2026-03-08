@@ -98,11 +98,16 @@ router.get('/:patientId/detail', async (req: AuthRequest, res: Response) => {
       `SELECT po.id, po.patient_id, po.order_date, po.drug_name,
          po.dose, po.dose_unit, po.route, po.is_antineoplastic,
          po.bag_no, po.solvent_name, po.solvent_vol_ml, po.bag_order,
+         po.rp_no, po.route_label, po.order_no,
          po.regimen_name
        FROM patient_orders po
        WHERE po.patient_id = $1
          AND po.order_date = CURRENT_DATE
-       ORDER BY po.bag_no NULLS LAST, po.bag_order, po.is_antineoplastic DESC, po.drug_name`,
+       ORDER BY
+         COALESCE(po.rp_no, po.bag_no + 1, 999) ASC,
+         po.bag_order ASC,
+         po.is_antineoplastic DESC,
+         po.drug_name`,
       [patientId]
     );
 
@@ -118,55 +123,63 @@ router.get('/:patientId/detail', async (req: AuthRequest, res: Response) => {
       const futureDate = futureOrderDates[0].order_date;
       const { rows } = await pool.query(
         `SELECT id, patient_id, order_date, drug_name, dose, dose_unit, route, is_antineoplastic,
-           bag_no, solvent_name, solvent_vol_ml, bag_order, regimen_name
+           bag_no, solvent_name, solvent_vol_ml, bag_order,
+           rp_no, route_label, order_no, regimen_name
          FROM patient_orders
          WHERE patient_id = $1 AND order_date = $2
-         ORDER BY bag_no NULLS LAST, bag_order, is_antineoplastic DESC, drug_name`,
+         ORDER BY
+           COALESCE(rp_no, bag_no + 1, 999) ASC,
+           bag_order ASC,
+           is_antineoplastic DESC,
+           drug_name`,
         [patientId, futureDate]
       );
       futureOrders = rows;
     }
 
-    // 治療歴（直近50件）: 古い順 ASC、auditor_name, audited_at も返す
+    // 治療歴（直近7件）: 新しい順に7件取得後、表示用に昇順に並べ直す
     const { rows: treatmentHistory } = await pool.query(
-      `SELECT st.id, st.scheduled_date, st.status, r.name AS regimen_name,
-         st.regimen_id,
-         rc.id AS calendar_id,
-         rc.cycle_no,
-         rc.audit_status,
-         rc.auditor_name,
-         rc.audited_at,
-         rc.status AS calendar_status,
-         COALESCE(
-           (SELECT STRING_AGG(
-              po.drug_name || CASE WHEN po.dose IS NOT NULL
-                THEN ' ' || po.dose::text || COALESCE(po.dose_unit, '') ELSE '' END,
-              ' / ' ORDER BY po.drug_name)
-            FROM patient_orders po
-            WHERE po.patient_id = st.patient_id
-              AND po.order_date = st.scheduled_date
-              AND po.is_antineoplastic = true),
-           ''
-         ) AS antineoplastic_drugs,
-         COALESCE(
-           (SELECT STRING_AGG(
-              po.drug_name || CASE WHEN po.dose IS NOT NULL
-                THEN ' ' || po.dose::text || COALESCE(po.dose_unit, '') ELSE '' END,
-              ' / ' ORDER BY po.drug_name)
-            FROM patient_orders po
-            WHERE po.patient_id = st.patient_id
-              AND po.order_date = st.scheduled_date
-              AND po.is_antineoplastic = false),
-           ''
-         ) AS support_drugs
-       FROM scheduled_treatments st
-       JOIN regimens r ON r.id = st.regimen_id
-       LEFT JOIN regimen_calendar rc ON rc.patient_id = st.patient_id
-         AND rc.regimen_id = st.regimen_id
-         AND rc.treatment_date = st.scheduled_date
-       WHERE st.patient_id = $1
-       ORDER BY st.scheduled_date ASC
-       LIMIT 50`,
+      `SELECT * FROM (
+         SELECT st.id, st.scheduled_date, st.status, r.name AS regimen_name,
+           st.regimen_id,
+           rc.id AS calendar_id,
+           rc.cycle_no,
+           rc.audit_status,
+           rc.auditor_name,
+           rc.audited_at,
+           rc.status AS calendar_status,
+           COALESCE(
+             (SELECT STRING_AGG(
+                po.drug_name || CASE WHEN po.dose IS NOT NULL
+                  THEN ' ' || po.dose::text || COALESCE(po.dose_unit, '') ELSE '' END,
+                ' / ' ORDER BY po.drug_name)
+              FROM patient_orders po
+              WHERE po.patient_id = st.patient_id
+                AND po.order_date = st.scheduled_date
+                AND po.is_antineoplastic = true),
+             ''
+           ) AS antineoplastic_drugs,
+           COALESCE(
+             (SELECT STRING_AGG(
+                po.drug_name || CASE WHEN po.dose IS NOT NULL
+                  THEN ' ' || po.dose::text || COALESCE(po.dose_unit, '') ELSE '' END,
+                ' / ' ORDER BY po.drug_name)
+              FROM patient_orders po
+              WHERE po.patient_id = st.patient_id
+                AND po.order_date = st.scheduled_date
+                AND po.is_antineoplastic = false),
+             ''
+           ) AS support_drugs
+         FROM scheduled_treatments st
+         JOIN regimens r ON r.id = st.regimen_id
+         LEFT JOIN regimen_calendar rc ON rc.patient_id = st.patient_id
+           AND rc.regimen_id = st.regimen_id
+           AND rc.treatment_date = st.scheduled_date
+         WHERE st.patient_id = $1
+         ORDER BY st.scheduled_date DESC
+         LIMIT 7
+       ) sub
+       ORDER BY scheduled_date ASC`,
       [patientId]
     );
 
@@ -213,6 +226,23 @@ router.get('/:patientId/detail', async (req: AuthRequest, res: Response) => {
       [patientId]
     );
 
+    // 患者の現在のレジメン名に対応する減量基準ルール
+    // regimens.name と regimen_master.regimen_name を名前で照合する
+    const { rows: toxicityRules } = await pool.query(
+      `SELECT rtr.toxicity_item, rtr.grade1_action, rtr.grade2_action,
+              rtr.grade3_action, rtr.grade4_action, rm.regimen_name
+       FROM regimen_toxicity_rules rtr
+       JOIN regimen_master rm ON rm.id = rtr.regimen_id
+       WHERE rm.regimen_name = (
+         SELECT r.name FROM scheduled_treatments st
+         JOIN regimens r ON r.id = st.regimen_id
+         WHERE st.patient_id = $1
+         ORDER BY st.scheduled_date DESC LIMIT 1
+       )
+       ORDER BY rtr.toxicity_item`,
+      [patientId]
+    );
+
     res.json({
       patient: { ...patient, latest_vital: latestVital },
       vitals: vitalsWithBSA,
@@ -225,6 +255,7 @@ router.get('/:patientId/detail', async (req: AuthRequest, res: Response) => {
       audits,
       doubts,
       infectionLabs,
+      toxicityRules,
     });
   } catch (e) {
     console.error('GET /:patientId/detail error:', e);

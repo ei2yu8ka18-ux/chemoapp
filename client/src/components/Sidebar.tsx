@@ -20,7 +20,8 @@ export { DRAWER_WIDTH };
 
 const NAV_ITEMS: { label: string; path: string; icon: React.ReactElement; disabled?: boolean }[] = [
   { label: '当日患者一覧',   path: '/',                     icon: <CalendarToday fontSize="small" /> },
-  { label: 'レジメン監査',   path: '/regimen',               icon: <Assignment fontSize="small" /> },
+  { label: 'レジメン監査未', path: '/regimen',               icon: <Assignment fontSize="small" /> },
+  { label: 'レジメン監査全', path: '/regimen-all',           icon: <Assignment fontSize="small" /> },
   { label: 'レジメンカレンダー', path: '/regimen-calendar',  icon: <DateRange fontSize="small" /> },
   { label: '点滴説明書',      path: '/guidance',              icon: <MenuBook fontSize="small" /> },
   { label: '業務日誌作成',   path: '/diary',                 icon: <Book fontSize="small" /> },
@@ -71,7 +72,7 @@ export default function Sidebar() {
   });
 
   const renderNavItem = (item: typeof NAV_ITEMS[0]) => {
-    const active = pathname === item.path;
+    const active = pathname === item.path || (item.path === '/regimen' && pathname === '/regimen');
     const btn = (
       <ListItemButton
         sx={itemSx(active, item.disabled)}

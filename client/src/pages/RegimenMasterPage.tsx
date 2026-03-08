@@ -195,6 +195,12 @@ export default function RegimenMasterPage() {
   /* ── カテゴリ一覧（既存から抽出） ── */
   const categories = [...new Set(masters.map(m => m.category).filter(Boolean) as string[])].sort();
 
+  /* ── カテゴリ別グループ ── */
+  const categorized: { label: string; items: RegimenMaster[] }[] = [
+    ...categories.map(cat => ({ label: cat, items: masters.filter(m => m.category === cat) })),
+    ...(masters.some(m => !m.category) ? [{ label: '未分類', items: masters.filter(m => !m.category) }] : []),
+  ];
+
   const gradeColor = (g: 1 | 2 | 3 | 4) => {
     if (g === 1) return { color: '#2e7d32', bg: '#f1f8e9' };
     if (g === 2) return { color: '#e65100', bg: '#fff8e1' };
@@ -218,13 +224,34 @@ export default function RegimenMasterPage() {
       {error && <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError('')}>{error}</Alert>}
       {loading && <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}><CircularProgress /></Box>}
 
-      {!loading && masters.map(m => {
+      {!loading && categorized.map(({ label: catLabel, items: catItems }) => (
+        <Box key={catLabel} sx={{ mb: 3 }}>
+          {/* ── カテゴリセクションヘッダー ── */}
+          <Box sx={{
+            display: 'flex', alignItems: 'center', gap: 1, mb: 1,
+            borderBottom: '2px solid', borderColor: catLabel === '未分類' ? '#90a4ae' : '#1565c0',
+            pb: 0.5,
+          }}>
+            <Typography sx={{
+              fontWeight: 'bold', fontSize: '0.95rem',
+              color: catLabel === '未分類' ? '#546e7a' : '#1565c0',
+            }}>
+              🏷️ {catLabel}
+            </Typography>
+            <Chip
+              label={`${catItems.length} レジメン`}
+              size="small"
+              sx={{ fontSize: '0.68rem', height: 18, bgcolor: '#e3f2fd', color: '#1565c0' }}
+            />
+          </Box>
+
+          {catItems.map(m => {
         const mDrugs = drugs.filter(d => d.regimen_id === m.id).sort((a, b) => a.sort_order - b.sort_order);
         const mTox = toxicity.filter(t => t.regimen_id === m.id).sort((a, b) => a.toxicity_item.localeCompare(b.toxicity_item));
         const isExpanded = expandedId === m.id;
 
         return (
-          <Paper key={m.id} variant="outlined" sx={{ mb: 2, overflow: 'hidden' }}>
+          <Paper key={m.id} variant="outlined" sx={{ mb: 1.5, overflow: 'hidden' }}>
             {/* ── レジメンヘッダー ── */}
             <Box sx={{
               px: 2, py: 1, bgcolor: m.is_active ? '#1c2833' : '#78909c',
@@ -235,7 +262,6 @@ export default function RegimenMasterPage() {
               <Typography sx={{ fontWeight: 'bold', color: '#fff', fontSize: '0.92rem', flexGrow: 1 }}>
                 {m.regimen_name}
               </Typography>
-              {m.category && <Chip label={m.category} size="small" sx={{ bgcolor: '#455a64', color: '#fff', fontSize: '0.7rem', height: 20 }} />}
               <Chip label={`${m.cycle_days}日周期`} size="small" sx={{ bgcolor: '#37474f', color: '#cfd8dc', fontSize: '0.7rem', height: 20 }} />
               {!m.is_active && <Chip label="無効" size="small" sx={{ bgcolor: '#b0bec5', color: '#fff', fontSize: '0.7rem', height: 20 }} />}
               <Tooltip title="編集">
@@ -405,6 +431,8 @@ export default function RegimenMasterPage() {
           </Paper>
         );
       })}
+        </Box>
+      ))}
 
       {/* ── レジメンマスタ 編集ダイアログ ── */}
       <Dialog open={masterDialog.open} onClose={() => setMasterDialog({ open: false, data: {} })} maxWidth="sm" fullWidth>

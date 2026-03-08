@@ -58,7 +58,10 @@ function AppRoutes() {
         <PrivateRoute><AppLayout><TreatmentListPage /></AppLayout></PrivateRoute>
       } />
       <Route path="/regimen" element={
-        <PrivateRoute><AppLayout><RegimenCheckPage /></AppLayout></PrivateRoute>
+        <PrivateRoute><AppLayout><RegimenCheckPage filterUnaudited={true} /></AppLayout></PrivateRoute>
+      } />
+      <Route path="/regimen-all" element={
+        <PrivateRoute><AppLayout><RegimenCheckPage filterUnaudited={false} /></AppLayout></PrivateRoute>
       } />
       <Route path="/regimen-calendar" element={
         <PrivateRoute><AppLayout><RegimenCalendarPage /></AppLayout></PrivateRoute>
