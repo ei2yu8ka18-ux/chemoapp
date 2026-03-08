@@ -49,11 +49,6 @@ function calcWork(start: string, end: string, lunch: boolean, lunchMin: number):
 function fmtMin(m: number): string {
   return m > 0 ? `${Math.floor(m / 60)}h${String(m % 60).padStart(2, '0')}m` : '-';
 }
-function fmtTime(iso: string): string {
-  if (!iso) return '';
-  const d = new Date(iso);
-  return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
-}
 
 const EMPTY_MANUAL = (): DiaryManual => ({
   first_visit_counseling: 0, allergy_stop: 0,

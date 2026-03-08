@@ -234,7 +234,7 @@ export default function InterventionModal({ open, treatment, onClose, onSaved }:
           {/* 介入種別 */}
           <SectionBox label="介入種別">
             <RadioGroup row value={form.intervention_type}
-              onChange={e => set('intervention_type', e.target.value as string)}>
+              onChange={e => set('intervention_type', e.target.value as '' | '提案' | '疑義' | '問い合わせ')}>
               {(['提案', '疑義', '問い合わせ'] as const).map(v => (
                 <FormControlLabel key={v} value={v}
                   control={<Radio size="small" sx={radioSx} />}
@@ -247,7 +247,7 @@ export default function InterventionModal({ open, treatment, onClose, onSaved }:
           {/* 診察前・後 */}
           <SectionBox label="診察前・後">
             <RadioGroup row value={form.consultation_timing}
-              onChange={e => set('consultation_timing', e.target.value as string)}>
+              onChange={e => set('consultation_timing', e.target.value as '' | '前' | '後')}>
               {(['前', '後'] as const).map(v => (
                 <FormControlLabel key={v} value={v}
                   control={<Radio size="small" sx={radioSx} />}

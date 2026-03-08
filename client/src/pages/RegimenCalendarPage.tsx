@@ -181,24 +181,27 @@ export default function RegimenCalendarPage() {
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
-  // セルクリック → ステータスサイクル
+  // セルクリック → ステータスサイクル（既存エントリのみ変更可、新規作成不可）
   const handleCellClick = async (row: PatientRow, date: string) => {
     const key = `${row.patient_id}-${row.regimen_name}-${date}`;
     const existing = entryMap.get(key);
+    // 既存エントリがない日付はクリック不可（新規作成しない）
+    if (!existing) return;
+
     const curStatus = existing?.status ?? null;
     const newStatus = nextStatus(curStatus);
     const regimenId = existing?.regimen_id ?? row.regimen_ids[0];
 
     try {
-      if (existing?.id) {
+      if (existing.id) {
         // 既存レコード更新（audit_status は触らない）
         const res = await api.patch<CalendarEntry>(`${API}/calendar/${existing.id}`, {
           status: newStatus,
         });
         const updated = { ...res.data, patient_no: row.patient_no, patient_name: row.patient_name, department: row.department, regimen_name: row.regimen_name };
         setEntries(prev => prev.map(e => (e.id === existing.id ? updated : e)));
-      } else if (existing && existing.id === null) {
-        // auto-entry (scheduled_treatments 由来) → DB に保存（newStatus は常に非null）
+      } else {
+        // auto-entry (scheduled_treatments 由来) → DB に保存
         const res = await api.post<CalendarEntry>(`${API}/calendar`, {
           patient_id: row.patient_id,
           regimen_id: regimenId,
@@ -207,16 +210,6 @@ export default function RegimenCalendarPage() {
         });
         const added = { ...res.data, patient_no: row.patient_no, patient_name: row.patient_name, department: row.department, regimen_name: row.regimen_name };
         setEntries(prev => [...prev.filter(e => !(e.patient_id === row.patient_id && e.regimen_name === row.regimen_name && e.treatment_date === date && e.id === null)), added]);
-      } else {
-        // 新規作成（newStatus は常に非null）
-        const res = await api.post<CalendarEntry>(`${API}/calendar`, {
-          patient_id: row.patient_id,
-          regimen_id: regimenId,
-          treatment_date: date,
-          status: newStatus,
-        });
-        const added = { ...res.data, patient_no: row.patient_no, patient_name: row.patient_name, department: row.department, regimen_name: row.regimen_name };
-        setEntries(prev => [...prev, added]);
       }
     } catch {
       fetchData();
@@ -312,7 +305,7 @@ export default function RegimenCalendarPage() {
               <Typography variant="caption">{def.label}</Typography>
             </Box>
           ))}
-          <Typography variant="caption" sx={{ color: '#888' }}>（左クリック: ○→●→▲→×→○　右クリック: 監査記録）</Typography>
+          <Typography variant="caption" sx={{ color: '#888' }}>（左クリック: 既存エントリのみ ○→●→▲→×→○　右クリック: 監査記録）</Typography>
         </Box>
       </Box>
 
@@ -423,7 +416,7 @@ export default function RegimenCalendarPage() {
                             borderLeft: isToday ? '1px solid #ffa000' : d.slice(8) === '01' ? '1px solid #bbb' : '1px solid #e8e8e8',
                             borderBottom: '1px solid #e8e8e8',
                             textAlign: 'center',
-                            cursor: 'pointer',
+                            cursor: entry ? 'pointer' : 'default',
                             padding: '1px',
                             height: 32,
                             userSelect: 'none',

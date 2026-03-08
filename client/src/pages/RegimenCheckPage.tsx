@@ -1,10 +1,10 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   Box, Typography, Paper, TextField, Button,
   Table, TableHead, TableBody, TableRow, TableCell, TableContainer,
   Chip, CircularProgress, Alert, Dialog, DialogTitle, DialogContent,
   DialogActions, Stack,
-  List, ListItem, IconButton, Tooltip,
+  List, ListItem, IconButton, Tooltip, Checkbox,
 } from '@mui/material';
 import {
   Search, Add, CheckCircle, RadioButtonUnchecked,
@@ -25,7 +25,9 @@ const API = '/regimen-check';
 interface Patient {
   id: number; patient_no: string; name: string; furigana: string;
   department: string; doctor: string; dob: string | null; gender: string | null;
-  latest_regimen: string | null; audit_count: number;
+  latest_regimen: string | null;
+  doubt_count: number;
+  unaudited_count: number;
 }
 interface Vital { measured_date: string; height_cm: number | null; weight_kg: number | null; bsa: number | null; }
 interface Lab {
@@ -41,6 +43,8 @@ interface TreatmentHistory {
   regimen_id: number; calendar_id: number | null;
   cycle_no: number | null; antineoplastic_drugs: string; support_drugs: string;
   audit_status: string | null;    // null / 'audited' / 'doubt'
+  auditor_name: string | null;
+  audited_at: string | null;
   calendar_status: string | null; // regimen_calendar.status
 }
 interface FutureSchedule { order_date: string; antineoplastic_drugs: string; }
@@ -71,6 +75,10 @@ function calcAge(dob: string | null) {
 }
 const fmtDate = (d: string | null) => d ? d.slice(0, 10) : '―';
 const shortDate = (d: string | null) => d ? d.slice(5).replace('-', '/') : '―';
+const fmtDateTime = (d: string | null) => {
+  if (!d) return '―';
+  return d.slice(0, 16).replace('T', ' ');
+};
 
 /* ─── グラフ共通ドット（値ラベル付き） ──────────────────── */
 const ChartDot = (props: any) => {
@@ -208,7 +216,7 @@ function TreatmentStatusChip({ status }: { status: string }) {
   switch (status) {
     case '予定': case 'planned':
       return <Chip label="予定あり" size="small" sx={{ bgcolor: '#e3f2fd', color: '#1565c0', fontSize: '0.68rem', height: 18, fontWeight: 'bold' }} />;
-    case '変更': case 'changed':
+    case '変更': case 'changed': case 'pending':
       return <Chip label="変更あり" size="small" sx={{ bgcolor: '#fff3e0', color: '#e65100', fontSize: '0.68rem', height: 18, fontWeight: 'bold' }} />;
     case '実施': case 'done':
       return <Chip label="済" size="small" sx={{ bgcolor: '#f5f5f5', color: '#757575', fontSize: '0.68rem', height: 18 }} />;
@@ -219,7 +227,16 @@ function TreatmentStatusChip({ status }: { status: string }) {
   }
 }
 
-/* ─── オーダーカラム（経路削除・投与量編集） ──────────────── */
+/* ─── 監査ステータスChip ─────────────────────────────────── */
+function AuditStatusChip({ status }: { status: string | null }) {
+  if (status === 'audited')
+    return <Chip label="監査済" size="small" sx={{ bgcolor: '#e3f2fd', color: '#1565c0', fontSize: '0.62rem', height: 16, fontWeight: 'bold' }} />;
+  if (status === 'doubt')
+    return <Chip label="疑義中" size="small" sx={{ bgcolor: '#ffebee', color: '#c62828', fontSize: '0.62rem', height: 16, fontWeight: 'bold' }} />;
+  return <Chip label="未監査" size="small" sx={{ bgcolor: '#fff9c4', color: '#f57f17', fontSize: '0.62rem', height: 16, fontWeight: 'bold' }} />;
+}
+
+/* ─── オーダーカラム（投与量編集） ──────────────────────── */
 function OrderColumn({
   orders, label, dateStr, onReload,
 }: {
@@ -334,12 +351,22 @@ export default function RegimenCheckPage() {
   // 治療歴展開
   const [historyExpanded, setHistoryExpanded] = useState(true);
 
+  // 既往歴展開（ヘッダー近く）
+  const [medHistoryOpen, setMedHistoryOpen] = useState(false);
+
+  // 一括監査選択
+  const [selectedHistoryIds, setSelectedHistoryIds] = useState<Set<number>>(new Set());
+  const [batchLoading, setBatchLoading] = useState(false);
+
   // 患者一覧
-  useEffect(() => {
-    api.get<Patient[]>(`${API}/patients`)
-      .then(r => setPatients(r.data))
-      .catch(e => console.error('patients fetch error:', e));
+  const loadPatients = useCallback(async () => {
+    try {
+      const r = await api.get<Patient[]>(`${API}/patients`);
+      setPatients(r.data);
+    } catch (e) { console.error('patients fetch error:', e); }
   }, []);
+
+  useEffect(() => { loadPatients(); }, [loadPatients]);
 
   // レジメンカレンダーからの遷移で患者を自動選択
   useEffect(() => {
@@ -352,6 +379,7 @@ export default function RegimenCheckPage() {
 
   const loadDetail = useCallback(async (pid: number) => {
     setLoading(true); setError('');
+    setSelectedHistoryIds(new Set());
     try {
       const r = await api.get<Detail>(`${API}/${pid}/detail`);
       setDetail(r.data);
@@ -421,9 +449,8 @@ export default function RegimenCheckPage() {
     } catch { /* ignore */ }
   };
 
-  // 監査ステータス設定
+  // 監査ステータス設定（個別）
   const handleSetAuditStatus = async (t: TreatmentHistory, newAuditStatus: string | null) => {
-    // 同じステータスをクリックしたら未監査に戻す
     const actualStatus = t.audit_status === newAuditStatus ? null : newAuditStatus;
     try {
       await api.patch(`${API}/calendar/audit-status`, {
@@ -431,9 +458,46 @@ export default function RegimenCheckPage() {
         regimen_id: t.regimen_id,
         treatment_date: t.scheduled_date,
         audit_status: actualStatus,
+        auditor_name: actualStatus ? (user?.displayName || '') : null,
       });
-      if (selectedId) loadDetail(selectedId);
+      if (selectedId) { loadDetail(selectedId); loadPatients(); }
     } catch { /* ignore */ }
+  };
+
+  // 一括監査ステータス変更
+  const handleBatchAudit = async (newStatus: string | null) => {
+    if (!selectedId || selectedHistoryIds.size === 0 || !detail) return;
+    setBatchLoading(true);
+    try {
+      const items = detail.treatmentHistory.filter(t => selectedHistoryIds.has(t.id));
+      await Promise.all(items.map(t => api.patch(`${API}/calendar/audit-status`, {
+        patient_id: selectedId,
+        regimen_id: t.regimen_id,
+        treatment_date: t.scheduled_date,
+        audit_status: newStatus,
+        auditor_name: newStatus ? (user?.displayName || '') : null,
+      })));
+      setSelectedHistoryIds(new Set());
+      await loadDetail(selectedId);
+      await loadPatients();
+    } finally { setBatchLoading(false); }
+  };
+
+  const toggleHistorySelect = (id: number) => {
+    setSelectedHistoryIds(prev => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  };
+
+  const toggleAllHistory = () => {
+    if (!detail) return;
+    if (selectedHistoryIds.size === detail.treatmentHistory.length) {
+      setSelectedHistoryIds(new Set());
+    } else {
+      setSelectedHistoryIds(new Set(detail.treatmentHistory.map(t => t.id)));
+    }
   };
 
   const filtered = patients.filter(p =>
@@ -445,11 +509,18 @@ export default function RegimenCheckPage() {
   const todayStr = new Date().toISOString().split('T')[0];
   const futureDate = detail?.futureOrders?.[0]?.order_date || '';
 
+  // 次回予定日（治療歴から。ASCソートなので今日より後の最初のもの）
+  const nextDate = useMemo(() => {
+    if (!detail?.treatmentHistory) return null;
+    const found = detail.treatmentHistory.find(t => (t.scheduled_date?.slice(0, 10) || '') > todayStr);
+    return found?.scheduled_date?.slice(0, 10) || null;
+  }, [detail?.treatmentHistory, todayStr]);
+
   return (
     <Box sx={{ display: 'flex', height: '100vh', overflow: 'hidden' }}>
 
       {/* ── 左パネル：患者一覧 ── */}
-      <Box sx={{ width: 210, flexShrink: 0, borderRight: '1px solid #ddd', display: 'flex', flexDirection: 'column', bgcolor: '#fafafa' }}>
+      <Box sx={{ width: 220, flexShrink: 0, borderRight: '1px solid #ddd', display: 'flex', flexDirection: 'column', bgcolor: '#fafafa' }}>
         <Box sx={{ p: 1, borderBottom: '1px solid #ddd' }}>
           <Typography variant="subtitle2" sx={{ fontWeight: 'bold', mb: 0.5, fontSize: '0.82rem' }}>レジメン監査</Typography>
           <TextField
@@ -474,10 +545,16 @@ export default function RegimenCheckPage() {
                 {pt.patient_no}　{pt.name}
               </Typography>
               <Typography sx={{ fontSize: '0.68rem', color: '#666' }}>{pt.latest_regimen || '—'}</Typography>
-              {pt.audit_count > 0 && (
-                <Chip label={`監査${pt.audit_count}件`} size="small" color="success"
-                  sx={{ fontSize: '0.62rem', height: 15, mt: 0.2 }} />
-              )}
+              <Box sx={{ display: 'flex', gap: 0.4, mt: 0.3, flexWrap: 'wrap' }}>
+                {pt.doubt_count > 0 && (
+                  <Chip label={`疑義${pt.doubt_count}件`} size="small"
+                    sx={{ fontSize: '0.62rem', height: 15, bgcolor: '#ffebee', color: '#c62828', fontWeight: 'bold' }} />
+                )}
+                {pt.unaudited_count > 0 && (
+                  <Chip label={`未監査${pt.unaudited_count}件`} size="small"
+                    sx={{ fontSize: '0.62rem', height: 15, bgcolor: '#fff9c4', color: '#f57f17', fontWeight: 'bold' }} />
+                )}
+              </Box>
             </Box>
           ))}
         </Box>
@@ -488,23 +565,71 @@ export default function RegimenCheckPage() {
 
         {/* 患者ヘッダー */}
         {p ? (
-          <Box sx={{ px: 2, py: 0.8, borderBottom: '1px solid #ddd', bgcolor: '#f0f4ff', display: 'flex', alignItems: 'center', gap: 1.5, flexWrap: 'wrap', flexShrink: 0 }}>
-            <Person sx={{ color: '#3f51b5', fontSize: 20 }} />
-            <Typography sx={{ fontWeight: 'bold', fontSize: '1rem' }}>{p.name}</Typography>
-            <Typography sx={{ fontSize: '0.75rem', color: '#555' }}>（{p.furigana}）</Typography>
-            <Chip label={`ID: ${p.patient_no}`} size="small" variant="outlined" sx={{ fontSize: '0.7rem' }} />
-            {p.dob && <Chip label={`${fmtDate(p.dob)}（${age}歳）`} size="small" sx={{ fontSize: '0.7rem' }} />}
-            {p.gender && <Chip label={p.gender} size="small" color={p.gender === '男性' ? 'info' : 'secondary'} sx={{ fontSize: '0.7rem' }} />}
-            <Chip label={p.department} size="small" variant="outlined" sx={{ fontSize: '0.7rem' }} />
-            <Chip label={`Dr. ${p.doctor}`} size="small" variant="outlined" sx={{ fontSize: '0.7rem' }} />
-            {p.latest_vital && (
-              <Box sx={{ ml: 'auto', display: 'flex', gap: 0.8 }}>
-                <Chip label={`身長 ${p.latest_vital.height_cm}cm`} size="small" sx={{ bgcolor: '#e8f5e9', fontSize: '0.7rem' }} />
-                <Chip label={`体重 ${p.latest_vital.weight_kg}kg`} size="small" sx={{ bgcolor: '#e8f5e9', fontSize: '0.7rem' }} />
-                {p.latest_vital.bsa && <Chip label={`BSA ${p.latest_vital.bsa}m²`} size="small" sx={{ bgcolor: '#fff9c4', fontSize: '0.7rem' }} />}
+          <>
+            <Box sx={{ px: 2, py: 0.8, borderBottom: '1px solid #ddd', bgcolor: '#f0f4ff', display: 'flex', alignItems: 'center', gap: 1.5, flexWrap: 'wrap', flexShrink: 0 }}>
+              <Person sx={{ color: '#3f51b5', fontSize: 20 }} />
+              <Typography sx={{ fontWeight: 'bold', fontSize: '1rem' }}>{p.name}</Typography>
+              <Typography sx={{ fontSize: '0.75rem', color: '#555' }}>（{p.furigana}）</Typography>
+              <Chip label={`ID: ${p.patient_no}`} size="small" variant="outlined" sx={{ fontSize: '0.7rem' }} />
+              {p.dob && <Chip label={`${fmtDate(p.dob)}（${age}歳）`} size="small" sx={{ fontSize: '0.7rem' }} />}
+              {p.gender && <Chip label={p.gender} size="small" color={p.gender === '男性' ? 'info' : 'secondary'} sx={{ fontSize: '0.7rem' }} />}
+              <Chip label={p.department} size="small" variant="outlined" sx={{ fontSize: '0.7rem' }} />
+              <Chip label={`Dr. ${p.doctor}`} size="small" variant="outlined" sx={{ fontSize: '0.7rem' }} />
+              {p.latest_vital && (
+                <Box sx={{ ml: 'auto', display: 'flex', gap: 0.8 }}>
+                  <Chip label={`身長 ${p.latest_vital.height_cm}cm`} size="small" sx={{ bgcolor: '#e8f5e9', fontSize: '0.7rem' }} />
+                  <Chip label={`体重 ${p.latest_vital.weight_kg}kg`} size="small" sx={{ bgcolor: '#e8f5e9', fontSize: '0.7rem' }} />
+                  {p.latest_vital.bsa && <Chip label={`BSA ${p.latest_vital.bsa}m²`} size="small" sx={{ bgcolor: '#fff9c4', fontSize: '0.7rem' }} />}
+                </Box>
+              )}
+            </Box>
+
+            {/* 既往歴バー（ヘッダー直下） */}
+            <Box
+              onClick={() => setMedHistoryOpen(v => !v)}
+              sx={{ px: 2, py: 0.5, borderBottom: '1px solid #ddd', bgcolor: '#f8f4ff', display: 'flex', alignItems: 'center', gap: 1, flexShrink: 0, cursor: 'pointer', '&:hover': { bgcolor: '#f0eaff' } }}>
+              <Typography sx={{ fontSize: '0.72rem', fontWeight: 'bold', color: '#37474f', whiteSpace: 'nowrap' }}>🏥 既往歴</Typography>
+              {detail?.medHistory && detail.medHistory.length > 0 ? (
+                detail.medHistory.slice(0, 4).map(m => (
+                  <Chip key={m.id} label={m.condition_name} size="small" variant="outlined"
+                    sx={{ fontSize: '0.65rem', height: 18, bgcolor: '#fff' }} />
+                ))
+              ) : (
+                <Typography sx={{ fontSize: '0.7rem', color: '#999' }}>登録なし</Typography>
+              )}
+              {detail?.medHistory && detail.medHistory.length > 4 && (
+                <Typography sx={{ fontSize: '0.7rem', color: '#888' }}>+{detail.medHistory.length - 4}件</Typography>
+              )}
+              <Box sx={{ flexGrow: 1 }} />
+              {medHistoryOpen
+                ? <ExpandLess sx={{ fontSize: 16, color: '#888' }} />
+                : <ExpandMore sx={{ fontSize: 16, color: '#888' }} />}
+            </Box>
+            {medHistoryOpen && detail?.medHistory && detail.medHistory.length > 0 && (
+              <Box sx={{ px: 2, py: 0.8, borderBottom: '1px solid #ddd', bgcolor: '#faf9ff', flexShrink: 0, maxHeight: 180, overflow: 'auto' }}>
+                <TableContainer component={Paper} variant="outlined">
+                  <Table size="small">
+                    <TableHead sx={{ bgcolor: '#ede7f6' }}>
+                      <TableRow>
+                        <TableCell sx={{ fontSize: '0.7rem', py: 0.3, fontWeight: 'bold' }}>疾患名</TableCell>
+                        <TableCell sx={{ fontSize: '0.7rem', py: 0.3, fontWeight: 'bold' }}>発症</TableCell>
+                        <TableCell sx={{ fontSize: '0.7rem', py: 0.3, fontWeight: 'bold' }}>転帰</TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {detail.medHistory.map(m => (
+                        <TableRow key={m.id}>
+                          <TableCell sx={{ fontSize: '0.75rem', py: 0.3, fontWeight: 'bold' }}>{m.condition_name}</TableCell>
+                          <TableCell sx={{ fontSize: '0.72rem', py: 0.3, whiteSpace: 'nowrap' }}>{fmtDate(m.onset_date)}</TableCell>
+                          <TableCell sx={{ fontSize: '0.72rem', py: 0.3 }}>{m.notes || '継続'}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
               </Box>
             )}
-          </Box>
+          </>
         ) : (
           <Box sx={{ px: 2, py: 1.2, borderBottom: '1px solid #ddd', bgcolor: '#f5f5f5', flexShrink: 0 }}>
             <Typography color="text.secondary" variant="body2">← 左から患者を選択してください</Typography>
@@ -528,6 +653,35 @@ export default function RegimenCheckPage() {
                 </Typography>
                 {historyExpanded ? <ExpandLess sx={{ color: '#aed6f1', fontSize: 18 }} /> : <ExpandMore sx={{ color: '#aed6f1', fontSize: 18 }} />}
               </Box>
+
+              {/* 一括操作バー */}
+              {historyExpanded && selectedHistoryIds.size > 0 && (
+                <Box sx={{ px: 1.5, py: 0.6, bgcolor: '#e8f0fe', borderBottom: '1px solid #c5cae9', display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <Typography sx={{ fontSize: '0.78rem', color: '#3949ab', fontWeight: 'bold' }}>
+                    {selectedHistoryIds.size}件選択中
+                  </Typography>
+                  <Button size="small" variant="contained" disabled={batchLoading}
+                    sx={{ fontSize: '0.72rem', py: 0.2, bgcolor: '#1565c0', '&:hover': { bgcolor: '#0d47a1' } }}
+                    onClick={() => handleBatchAudit('audited')}>
+                    監査済にする
+                  </Button>
+                  <Button size="small" variant="contained" disabled={batchLoading}
+                    sx={{ fontSize: '0.72rem', py: 0.2, bgcolor: '#c62828', '&:hover': { bgcolor: '#b71c1c' } }}
+                    onClick={() => handleBatchAudit('doubt')}>
+                    疑義照会中にする
+                  </Button>
+                  <Button size="small" variant="outlined" disabled={batchLoading}
+                    sx={{ fontSize: '0.72rem', py: 0.2 }}
+                    onClick={() => handleBatchAudit(null)}>
+                    未監査に戻す
+                  </Button>
+                  <Button size="small" sx={{ fontSize: '0.72rem', py: 0.2, ml: 'auto' }}
+                    onClick={() => setSelectedHistoryIds(new Set())}>
+                    選択解除
+                  </Button>
+                </Box>
+              )}
+
               {historyExpanded && (
                 detail.treatmentHistory.length === 0 ? (
                   <Box sx={{ px: 2, py: 1.5 }}>
@@ -538,75 +692,93 @@ export default function RegimenCheckPage() {
                     <Table size="small" stickyHeader>
                       <TableHead>
                         <TableRow>
+                          <TableCell padding="checkbox" sx={{ py: 0.3, bgcolor: '#eceff1' }}>
+                            <Checkbox size="small" sx={{ p: 0 }}
+                              checked={selectedHistoryIds.size === detail.treatmentHistory.length && detail.treatmentHistory.length > 0}
+                              indeterminate={selectedHistoryIds.size > 0 && selectedHistoryIds.size < detail.treatmentHistory.length}
+                              onChange={toggleAllHistory} />
+                          </TableCell>
                           <TableCell sx={{ fontSize: '0.72rem', py: 0.5, bgcolor: '#eceff1', fontWeight: 'bold', whiteSpace: 'nowrap' }}>実施日</TableCell>
                           <TableCell sx={{ fontSize: '0.72rem', py: 0.5, bgcolor: '#eceff1', fontWeight: 'bold' }}>レジメン</TableCell>
                           <TableCell sx={{ fontSize: '0.72rem', py: 0.5, bgcolor: '#eceff1', fontWeight: 'bold' }}>Cycle</TableCell>
                           <TableCell sx={{ fontSize: '0.72rem', py: 0.5, bgcolor: '#eceff1', fontWeight: 'bold' }}>監査</TableCell>
+                          <TableCell sx={{ fontSize: '0.72rem', py: 0.5, bgcolor: '#eceff1', fontWeight: 'bold' }}>監査者</TableCell>
                           <TableCell sx={{ fontSize: '0.72rem', py: 0.5, bgcolor: '#eceff1', fontWeight: 'bold' }}>状態</TableCell>
                           <TableCell sx={{ fontSize: '0.72rem', py: 0.5, bgcolor: '#eceff1', fontWeight: 'bold' }}>抗腫瘍薬（オーダー）</TableCell>
                           <TableCell sx={{ fontSize: '0.72rem', py: 0.5, bgcolor: '#eceff1', fontWeight: 'bold' }}>支持療法</TableCell>
                         </TableRow>
                       </TableHead>
                       <TableBody>
-                        {detail.treatmentHistory.map((t, i) => (
-                          <TableRow key={t.id} sx={{ bgcolor: i % 2 === 0 ? '#fff' : '#fafafa' }}>
-                            <TableCell sx={{ fontSize: '0.78rem', py: 0.4, whiteSpace: 'nowrap', fontWeight: fmtDate(t.scheduled_date) === todayStr ? 'bold' : 'normal', color: fmtDate(t.scheduled_date) === todayStr ? '#e65100' : 'inherit' }}>
-                              {fmtDate(t.scheduled_date)}
-                              {fmtDate(t.scheduled_date) === todayStr && <Chip label="今日" size="small" color="warning" sx={{ ml: 0.5, fontSize: '0.62rem', height: 15 }} />}
-                            </TableCell>
-                            <TableCell sx={{ fontSize: '0.78rem', py: 0.4, fontWeight: 'bold', color: '#1a237e' }}>{t.regimen_name}</TableCell>
-                            <TableCell sx={{ py: 0.2 }}>
-                              <TextField
-                                key={`cycle-${t.id}-${t.cycle_no}`}
-                                defaultValue={t.cycle_no ?? ''}
-                                onBlur={e => handleSaveCycle(t, e.target.value)}
-                                onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
-                                size="small"
-                                placeholder="―"
-                                type="number"
-                                inputProps={{ min: 1, style: { textAlign: 'center' } }}
-                                sx={{ width: 56, '& .MuiInputBase-input': { fontSize: '0.75rem', py: 0.2, px: 0.5 } }}
-                              />
-                            </TableCell>
-                            <TableCell sx={{ py: 0.2 }}>
-                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.4 }}>
-                                {t.audit_status === 'audited' ? (
-                                  <Chip label="監査済" size="small" color="success"
-                                    sx={{ fontSize: '0.62rem', height: 16 }} />
-                                ) : t.audit_status === 'doubt' ? (
-                                  <Chip label="疑義中" size="small" color="warning"
-                                    sx={{ fontSize: '0.62rem', height: 16 }} />
-                                ) : (
-                                  <Chip label="未監査" size="small"
-                                    sx={{ fontSize: '0.62rem', height: 16, bgcolor: '#f5f5f5', color: '#9e9e9e' }} />
-                                )}
-                                <Tooltip title={t.audit_status === 'audited' ? '未監査に戻す' : '監査済にする'}>
-                                  <IconButton size="small" color={t.audit_status === 'audited' ? 'success' : 'default'}
-                                    onClick={() => handleSetAuditStatus(t, 'audited')}
-                                    sx={{ p: 0.3 }}>
-                                    <CheckCircle sx={{ fontSize: 15 }} />
-                                  </IconButton>
-                                </Tooltip>
-                                <Tooltip title={t.audit_status === 'doubt' ? '未監査に戻す' : '疑義照会中にする'}>
-                                  <IconButton size="small" color={t.audit_status === 'doubt' ? 'warning' : 'default'}
-                                    onClick={() => handleSetAuditStatus(t, 'doubt')}
-                                    sx={{ p: 0.3 }}>
-                                    <Warning sx={{ fontSize: 15 }} />
-                                  </IconButton>
-                                </Tooltip>
-                              </Box>
-                            </TableCell>
-                            <TableCell sx={{ fontSize: '0.72rem', py: 0.4 }}>
-                              <TreatmentStatusChip status={t.status} />
-                            </TableCell>
-                            <TableCell sx={{ fontSize: '0.72rem', py: 0.4, color: t.antineoplastic_drugs ? '#b71c1c' : '#bbb' }}>
-                              {t.antineoplastic_drugs || '（オーダーデータなし）'}
-                            </TableCell>
-                            <TableCell sx={{ fontSize: '0.7rem', py: 0.4, color: '#555' }}>
-                              {t.support_drugs || '―'}
-                            </TableCell>
-                          </TableRow>
-                        ))}
+                        {detail.treatmentHistory.map((t, i) => {
+                          const rowDateStr = t.scheduled_date?.slice(0, 10) || '';
+                          const isToday = rowDateStr === todayStr;
+                          const isNext = rowDateStr === nextDate;
+                          const rowBg = isToday ? '#dbeafe' : isNext ? '#dcfce7' : (i % 2 === 0 ? '#fff' : '#fafafa');
+                          return (
+                            <TableRow key={t.id} sx={{ bgcolor: rowBg }}>
+                              <TableCell padding="checkbox" sx={{ py: 0.2 }}>
+                                <Checkbox size="small" sx={{ p: 0 }}
+                                  checked={selectedHistoryIds.has(t.id)}
+                                  onChange={() => toggleHistorySelect(t.id)} />
+                              </TableCell>
+                              <TableCell sx={{ fontSize: '0.78rem', py: 0.4, whiteSpace: 'nowrap', fontWeight: isToday ? 'bold' : 'normal', color: isToday ? '#e65100' : 'inherit' }}>
+                                {fmtDate(t.scheduled_date)}
+                                {isToday && <Chip label="今日" size="small" color="warning" sx={{ ml: 0.5, fontSize: '0.62rem', height: 15 }} />}
+                                {isNext && <Chip label="次回" size="small" color="success" sx={{ ml: 0.5, fontSize: '0.62rem', height: 15 }} />}
+                              </TableCell>
+                              <TableCell sx={{ fontSize: '0.78rem', py: 0.4, fontWeight: 'bold', color: '#1a237e' }}>{t.regimen_name}</TableCell>
+                              <TableCell sx={{ py: 0.2 }}>
+                                <TextField
+                                  key={`cycle-${t.id}-${t.cycle_no}`}
+                                  defaultValue={t.cycle_no ?? ''}
+                                  onBlur={e => handleSaveCycle(t, e.target.value)}
+                                  onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
+                                  size="small"
+                                  placeholder="―"
+                                  type="number"
+                                  inputProps={{ min: 1, style: { textAlign: 'center' } }}
+                                  sx={{ width: 56, '& .MuiInputBase-input': { fontSize: '0.75rem', py: 0.2, px: 0.5 } }}
+                                />
+                              </TableCell>
+                              <TableCell sx={{ py: 0.2 }}>
+                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.4 }}>
+                                  <AuditStatusChip status={t.audit_status} />
+                                  <Tooltip title={t.audit_status === 'audited' ? '未監査に戻す' : '監査済にする'}>
+                                    <IconButton size="small"
+                                      sx={{ p: 0.3, color: t.audit_status === 'audited' ? '#1565c0' : '#bbb' }}
+                                      onClick={() => handleSetAuditStatus(t, 'audited')}>
+                                      <CheckCircle sx={{ fontSize: 15 }} />
+                                    </IconButton>
+                                  </Tooltip>
+                                  <Tooltip title={t.audit_status === 'doubt' ? '未監査に戻す' : '疑義照会中にする'}>
+                                    <IconButton size="small"
+                                      sx={{ p: 0.3, color: t.audit_status === 'doubt' ? '#c62828' : '#bbb' }}
+                                      onClick={() => handleSetAuditStatus(t, 'doubt')}>
+                                      <Warning sx={{ fontSize: 15 }} />
+                                    </IconButton>
+                                  </Tooltip>
+                                </Box>
+                              </TableCell>
+                              <TableCell sx={{ fontSize: '0.7rem', py: 0.4, color: t.auditor_name ? '#37474f' : '#bbb' }}>
+                                {t.auditor_name ? (
+                                  <>
+                                    <Typography sx={{ fontSize: '0.7rem', fontWeight: 'bold', lineHeight: 1.3 }}>{t.auditor_name}</Typography>
+                                    <Typography sx={{ fontSize: '0.62rem', color: '#888', lineHeight: 1.2 }}>{fmtDateTime(t.audited_at)}</Typography>
+                                  </>
+                                ) : '―'}
+                              </TableCell>
+                              <TableCell sx={{ fontSize: '0.72rem', py: 0.4 }}>
+                                <TreatmentStatusChip status={t.status} />
+                              </TableCell>
+                              <TableCell sx={{ fontSize: '0.72rem', py: 0.4, color: t.antineoplastic_drugs ? '#b71c1c' : '#bbb' }}>
+                                {t.antineoplastic_drugs || '（オーダーデータなし）'}
+                              </TableCell>
+                              <TableCell sx={{ fontSize: '0.7rem', py: 0.4, color: '#555' }}>
+                                {t.support_drugs || '―'}
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })}
                       </TableBody>
                     </Table>
                   </TableContainer>
@@ -643,41 +815,12 @@ export default function RegimenCheckPage() {
               <BloodChart labs={detail.labs} />
             </Paper>
 
-            {/* ━━━━ ④ 体格・腎肝機能（2列） ━━━━ */}
-            <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1.5, mb: 1.5 }}>
+            {/* ━━━━ ④ 体格・腎肝機能（3列） ━━━━ */}
+            <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 1.5, mb: 1.5 }}>
               <Paper variant="outlined" sx={{ p: 1.2 }}>
                 <SectionHeader color="#1565c0">⚖️ 体重・BSA（過去1年）</SectionHeader>
                 <VitalChart vitals={detail.vitals} />
               </Paper>
-              <Paper variant="outlined" sx={{ p: 1.2 }}>
-                <SectionHeader color="#37474f">🏥 既往歴</SectionHeader>
-                {detail.medHistory.length ? (
-                  <TableContainer>
-                    <Table size="small">
-                      <TableHead sx={{ bgcolor: '#eceff1' }}>
-                        <TableRow>
-                          <TableCell sx={{ fontSize: '0.7rem', py: 0.4, fontWeight: 'bold' }}>疾患名</TableCell>
-                          <TableCell sx={{ fontSize: '0.7rem', py: 0.4, fontWeight: 'bold' }}>発症</TableCell>
-                          <TableCell sx={{ fontSize: '0.7rem', py: 0.4, fontWeight: 'bold' }}>転帰</TableCell>
-                        </TableRow>
-                      </TableHead>
-                      <TableBody>
-                        {detail.medHistory.map(m => (
-                          <TableRow key={m.id}>
-                            <TableCell sx={{ fontSize: '0.75rem', py: 0.4, fontWeight: 'bold' }}>{m.condition_name}</TableCell>
-                            <TableCell sx={{ fontSize: '0.72rem', py: 0.4, whiteSpace: 'nowrap' }}>{fmtDate(m.onset_date)}</TableCell>
-                            <TableCell sx={{ fontSize: '0.72rem', py: 0.4 }}>{m.notes || '継続'}</TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </TableContainer>
-                ) : <Typography variant="body2" color="text.secondary">登録なし</Typography>}
-              </Paper>
-            </Box>
-
-            {/* ━━━━ ⑤ 腎肝機能グラフ（2列） ━━━━ */}
-            <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1.5, mb: 1.5 }}>
               <Paper variant="outlined" sx={{ p: 1.2 }}>
                 <SectionHeader color="#0277bd">🫘 腎機能（Cre / eGFR）</SectionHeader>
                 <RenalChart labs={detail.labs} />
@@ -688,7 +831,7 @@ export default function RegimenCheckPage() {
               </Paper>
             </Box>
 
-            {/* ━━━━ ⑥ 監査・疑義（2列） ━━━━ */}
+            {/* ━━━━ ⑤ 監査・疑義（2列） ━━━━ */}
             <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1.5, mb: 1.5 }}>
               {/* 監査コメント */}
               <Paper variant="outlined" sx={{ p: 1.2 }}>
@@ -760,7 +903,7 @@ export default function RegimenCheckPage() {
               </Paper>
             </Box>
 
-            {/* ━━━━ ⑦ 監査ログ ━━━━ */}
+            {/* ━━━━ ⑥ 監査ログ ━━━━ */}
             {detail.audits.length > 0 && (
               <Paper variant="outlined" sx={{ p: 1.2 }}>
                 <SectionHeader color="#37474f">🗒️ 監査ログ</SectionHeader>

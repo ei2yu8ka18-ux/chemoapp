@@ -8,7 +8,7 @@ import {
 import {
   CalendarToday, Assignment, MenuBook, Book,
   History, BarChart, TrendingUp, ManageAccounts, LibraryBooks,
-  Summarize, Lock, TableChart, Settings, Login,
+  Summarize, Lock, TableChart, Settings, Login, MedicalServices,
   ChevronLeft, ChevronRight, DateRange,
 } from '@mui/icons-material';
 import { useAuth } from '../contexts/AuthContext';
@@ -36,6 +36,7 @@ const ADMIN_ITEMS = [
   { label: 'ユーザー管理',     path: '/admin/users',                icon: <ManageAccounts fontSize="small" /> },
   { label: '診察前面談設定',   path: '/admin/pre-consult-settings', icon: <Settings fontSize="small" /> },
   { label: 'ログイン記録',     path: '/admin/auth-logs',            icon: <Login fontSize="small" /> },
+  { label: 'レジメンマスタ',   path: '/admin/regimen-master',       icon: <MedicalServices fontSize="small" /> },
 ];
 
 export default function Sidebar() {

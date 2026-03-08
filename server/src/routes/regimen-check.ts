@@ -19,9 +19,24 @@ router.get('/patients', async (_req: AuthRequest, res: Response) => {
           JOIN regimens r ON r.id = st.regimen_id
           WHERE st.patient_id = p.id
           ORDER BY st.scheduled_date DESC LIMIT 1) AS latest_regimen,
-         (SELECT COUNT(*) FROM regimen_audits ra WHERE ra.patient_id = p.id) AS audit_count
+         (SELECT COUNT(*)
+          FROM regimen_calendar rc2
+          WHERE rc2.patient_id = p.id
+            AND rc2.audit_status = 'doubt') AS doubt_count,
+         (SELECT COUNT(*)
+          FROM scheduled_treatments st2
+          WHERE st2.patient_id = p.id
+            AND st2.scheduled_date <= CURRENT_DATE
+            AND NOT EXISTS (
+              SELECT 1 FROM regimen_calendar rc3
+              WHERE rc3.patient_id = st2.patient_id
+                AND rc3.regimen_id = st2.regimen_id
+                AND rc3.treatment_date = st2.scheduled_date
+                AND rc3.audit_status IN ('audited','doubt')
+            )
+         ) AS unaudited_count
        FROM patients p
-       ORDER BY p.patient_no`
+       ORDER BY doubt_count DESC, unaudited_count DESC, p.patient_no`
     );
     res.json(rows);
   } catch (e) {
@@ -109,13 +124,15 @@ router.get('/:patientId/detail', async (req: AuthRequest, res: Response) => {
       futureOrders = rows;
     }
 
-    // 治療歴（直近30件）: calendar_id も返す
+    // 治療歴（直近50件）: 古い順 ASC、auditor_name, audited_at も返す
     const { rows: treatmentHistory } = await pool.query(
       `SELECT st.id, st.scheduled_date, st.status, r.name AS regimen_name,
          st.regimen_id,
          rc.id AS calendar_id,
          rc.cycle_no,
          rc.audit_status,
+         rc.auditor_name,
+         rc.audited_at,
          rc.status AS calendar_status,
          COALESCE(
            (SELECT STRING_AGG(
@@ -145,8 +162,8 @@ router.get('/:patientId/detail', async (req: AuthRequest, res: Response) => {
          AND rc.regimen_id = st.regimen_id
          AND rc.treatment_date = st.scheduled_date
        WHERE st.patient_id = $1
-       ORDER BY st.scheduled_date DESC
-       LIMIT 30`,
+       ORDER BY st.scheduled_date ASC
+       LIMIT 50`,
       [patientId]
     );
 
@@ -257,7 +274,6 @@ router.patch('/doubts/:id', async (req: AuthRequest, res: Response) => {
 });
 
 // ── PATCH /api/regimen-check/patient-orders/:id ──────────────
-// 投与量手入力
 router.patch('/patient-orders/:id', async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
@@ -277,7 +293,6 @@ router.patch('/patient-orders/:id', async (req: AuthRequest, res: Response) => {
 });
 
 // ── POST /api/regimen-check/calendar/cycle ───────────────────
-// Cycle番号のupsert（治療歴から編集）
 router.post('/calendar/cycle', async (req: AuthRequest, res: Response) => {
   try {
     const { patient_id, regimen_id, treatment_date, cycle_no } = req.body;
@@ -297,7 +312,6 @@ router.post('/calendar/cycle', async (req: AuthRequest, res: Response) => {
 });
 
 // ── GET /api/regimen-check/calendar ─────────────────────────
-// regimen_calendar + scheduled_treatments を統合して返す
 router.get('/calendar', async (req: AuthRequest, res: Response) => {
   try {
     const { from, to } = req.query;
@@ -394,7 +408,6 @@ router.post('/calendar', async (req: AuthRequest, res: Response) => {
        RETURNING *`,
       [patient_id, regimen_id, treatment_date, cycle_no || null, status || 'planned', audit_status || null, notes || null]
     );
-    // 患者情報を付与して返す
     const { rows: info } = await pool.query(
       `SELECT p.patient_no, p.name AS patient_name, p.department, r.name AS regimen_name
        FROM patients p, regimens r WHERE p.id = $1 AND r.id = $2`,
@@ -403,6 +416,36 @@ router.post('/calendar', async (req: AuthRequest, res: Response) => {
     res.json({ ...rows[0], ...(info[0] || {}) });
   } catch (e) {
     console.error('POST /calendar error:', e);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// ── PATCH /api/regimen-check/calendar/audit-status ──────────
+// ※ /calendar/:id より必ず前に定義すること（ルーティング優先順位）
+router.patch('/calendar/audit-status', async (req: AuthRequest, res: Response) => {
+  try {
+    const { patient_id, regimen_id, treatment_date, audit_status, auditor_name } = req.body;
+    if (!patient_id || !regimen_id || !treatment_date) {
+      res.status(400).json({ error: 'patient_id, regimen_id, treatment_date required' }); return;
+    }
+    const { rows } = await pool.query(
+      `INSERT INTO regimen_calendar (patient_id, regimen_id, treatment_date, status, audit_status, auditor_name, audited_at)
+       VALUES ($1, $2, $3, 'planned', $4, $5, CASE WHEN $4 IS NOT NULL THEN NOW() ELSE NULL END)
+       ON CONFLICT (patient_id, regimen_id, treatment_date) DO UPDATE SET
+         audit_status = $4,
+         auditor_name = CASE WHEN $4 IS NOT NULL THEN $5 ELSE NULL END,
+         audited_at   = CASE WHEN $4 IS NOT NULL THEN NOW() ELSE NULL END,
+         status = CASE
+           WHEN $4 = 'audited' AND (regimen_calendar.status IS NULL OR regimen_calendar.status = '')
+             THEN 'planned'
+           ELSE regimen_calendar.status
+         END
+       RETURNING *`,
+      [patient_id, regimen_id, treatment_date, audit_status, auditor_name || null]
+    );
+    res.json(rows[0]);
+  } catch (e) {
+    console.error('PATCH /calendar/audit-status error:', e);
     res.status(500).json({ error: 'Server error' });
   }
 });
@@ -422,7 +465,6 @@ router.patch('/calendar/:id', async (req: AuthRequest, res: Response) => {
       [id, status, audit_status, notes, cycle_no ?? null]
     );
     if (!rows.length) { res.status(404).json({ error: 'Not found' }); return; }
-    // 患者情報を付与
     const { rows: info } = await pool.query(
       `SELECT p.patient_no, p.name AS patient_name, p.department, r.name AS regimen_name
        FROM regimen_calendar rc
@@ -439,7 +481,6 @@ router.patch('/calendar/:id', async (req: AuthRequest, res: Response) => {
 });
 
 // ── PATCH /api/regimen-check/regimens/:id ────────────────────
-// レジメン名変更
 router.patch('/regimens/:id', async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
@@ -457,36 +498,7 @@ router.patch('/regimens/:id', async (req: AuthRequest, res: Response) => {
   }
 });
 
-// ── PATCH /api/regimen-check/calendar/audit-status ──────────
-// 監査ステータスの設定（監査済 → カレンダーに○を自動セット）
-router.patch('/calendar/audit-status', async (req: AuthRequest, res: Response) => {
-  try {
-    const { patient_id, regimen_id, treatment_date, audit_status } = req.body;
-    if (!patient_id || !regimen_id || !treatment_date) {
-      res.status(400).json({ error: 'patient_id, regimen_id, treatment_date required' }); return;
-    }
-    const { rows } = await pool.query(
-      `INSERT INTO regimen_calendar (patient_id, regimen_id, treatment_date, status, audit_status)
-       VALUES ($1, $2, $3, 'planned', $4)
-       ON CONFLICT (patient_id, regimen_id, treatment_date) DO UPDATE SET
-         audit_status = $4,
-         status = CASE
-           WHEN $4 = 'audited' AND (regimen_calendar.status IS NULL OR regimen_calendar.status = '')
-             THEN 'planned'
-           ELSE regimen_calendar.status
-         END
-       RETURNING *`,
-      [patient_id, regimen_id, treatment_date, audit_status]
-    );
-    res.json(rows[0]);
-  } catch (e) {
-    console.error('PATCH /calendar/audit-status error:', e);
-    res.status(500).json({ error: 'Server error' });
-  }
-});
-
 // ── GET /api/regimen-check/calendar/audit-detail ─────────────
-// 右クリック監査記録ポップアップ用
 router.get('/calendar/audit-detail', async (req: AuthRequest, res: Response) => {
   try {
     const patient_id = Number(req.query.patient_id);
@@ -535,7 +547,6 @@ router.get('/calendar/audit-detail', async (req: AuthRequest, res: Response) => 
 });
 
 // ── GET /api/regimen-check/calendar/patients ─────────────────
-// (patient_id, regimen_name) でグループ化して返す
 router.get('/calendar/patients', async (_req: AuthRequest, res: Response) => {
   try {
     const { rows } = await pool.query(
@@ -555,6 +566,221 @@ router.get('/calendar/patients', async (_req: AuthRequest, res: Response) => {
     res.json(rows);
   } catch (e) {
     console.error('GET /calendar/patients error:', e);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// ══════════════════════════════════════════════════════════════
+// レジメンマスタ CRUD
+// ══════════════════════════════════════════════════════════════
+
+// ── GET /api/regimen-check/regimen-master ─────────────────────
+router.get('/regimen-master', async (_req: AuthRequest, res: Response) => {
+  try {
+    const { rows: masters } = await pool.query(
+      `SELECT id, regimen_name, category, cycle_days, description, is_active, created_at, updated_at
+       FROM regimen_master
+       ORDER BY category NULLS LAST, regimen_name`
+    );
+    const { rows: drugs } = await pool.query(
+      `SELECT id, regimen_id, sort_order, drug_name, drug_type, base_dose, dose_unit,
+         dose_per, solvent_name, solvent_volume, route, drip_time, notes
+       FROM regimen_drugs
+       ORDER BY regimen_id, sort_order`
+    );
+    const { rows: toxicity } = await pool.query(
+      `SELECT id, regimen_id, toxicity_item, grade1_action, grade2_action, grade3_action, grade4_action, notes
+       FROM regimen_toxicity_rules
+       ORDER BY regimen_id, toxicity_item`
+    );
+    res.json({ masters, drugs, toxicity });
+  } catch (e) {
+    console.error('GET /regimen-master error:', e);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// ── POST /api/regimen-check/regimen-master ────────────────────
+router.post('/regimen-master', async (req: AuthRequest, res: Response) => {
+  try {
+    const { regimen_name, category, cycle_days, description, is_active } = req.body;
+    if (!regimen_name?.trim()) { res.status(400).json({ error: 'regimen_name required' }); return; }
+    const { rows } = await pool.query(
+      `INSERT INTO regimen_master (regimen_name, category, cycle_days, description, is_active)
+       VALUES ($1, $2, $3, $4, $5) RETURNING *`,
+      [regimen_name.trim(), category || null, cycle_days || 21, description || null, is_active !== false]
+    );
+    res.json(rows[0]);
+  } catch (e: any) {
+    if (e.code === '23505') { res.status(409).json({ error: 'レジメン名が重複しています' }); return; }
+    console.error('POST /regimen-master error:', e);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// ── PATCH /api/regimen-check/regimen-master/:id ───────────────
+router.patch('/regimen-master/:id', async (req: AuthRequest, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { regimen_name, category, cycle_days, description, is_active } = req.body;
+    const { rows } = await pool.query(
+      `UPDATE regimen_master
+       SET regimen_name = COALESCE($2, regimen_name),
+           category     = COALESCE($3, category),
+           cycle_days   = COALESCE($4, cycle_days),
+           description  = COALESCE($5, description),
+           is_active    = COALESCE($6, is_active),
+           updated_at   = NOW()
+       WHERE id = $1 RETURNING *`,
+      [id, regimen_name || null, category || null, cycle_days || null, description || null, is_active ?? null]
+    );
+    if (!rows.length) { res.status(404).json({ error: 'Not found' }); return; }
+    res.json(rows[0]);
+  } catch (e: any) {
+    if (e.code === '23505') { res.status(409).json({ error: 'レジメン名が重複しています' }); return; }
+    console.error('PATCH /regimen-master/:id error:', e);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// ── DELETE /api/regimen-check/regimen-master/:id ──────────────
+router.delete('/regimen-master/:id', async (req: AuthRequest, res: Response) => {
+  try {
+    const { id } = req.params;
+    await pool.query(`DELETE FROM regimen_master WHERE id = $1`, [id]);
+    res.json({ ok: true });
+  } catch (e) {
+    console.error('DELETE /regimen-master/:id error:', e);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// ── POST /api/regimen-check/regimen-master/:id/drugs ─────────
+router.post('/regimen-master/:id/drugs', async (req: AuthRequest, res: Response) => {
+  try {
+    const regimenId = Number(req.params.id);
+    const { sort_order, drug_name, drug_type, base_dose, dose_unit, dose_per,
+            solvent_name, solvent_volume, route, drip_time, notes } = req.body;
+    if (!drug_name?.trim()) { res.status(400).json({ error: 'drug_name required' }); return; }
+    const { rows } = await pool.query(
+      `INSERT INTO regimen_drugs
+         (regimen_id, sort_order, drug_name, drug_type, base_dose, dose_unit, dose_per,
+          solvent_name, solvent_volume, route, drip_time, notes)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING *`,
+      [regimenId, sort_order || 1, drug_name.trim(), drug_type || 'antineoplastic',
+       base_dose || null, dose_unit || null, dose_per || 'BSA',
+       solvent_name || null, solvent_volume || null, route || null, drip_time || null, notes || null]
+    );
+    res.json(rows[0]);
+  } catch (e) {
+    console.error('POST /regimen-master/:id/drugs error:', e);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// ── PATCH /api/regimen-check/regimen-master/drugs/:drugId ────
+router.patch('/regimen-master/drugs/:drugId', async (req: AuthRequest, res: Response) => {
+  try {
+    const { drugId } = req.params;
+    const { sort_order, drug_name, drug_type, base_dose, dose_unit, dose_per,
+            solvent_name, solvent_volume, route, drip_time, notes } = req.body;
+    const { rows } = await pool.query(
+      `UPDATE regimen_drugs
+       SET sort_order    = COALESCE($2, sort_order),
+           drug_name     = COALESCE($3, drug_name),
+           drug_type     = COALESCE($4, drug_type),
+           base_dose     = COALESCE($5, base_dose),
+           dose_unit     = COALESCE($6, dose_unit),
+           dose_per      = COALESCE($7, dose_per),
+           solvent_name  = COALESCE($8, solvent_name),
+           solvent_volume= COALESCE($9, solvent_volume),
+           route         = COALESCE($10, route),
+           drip_time     = COALESCE($11, drip_time),
+           notes         = COALESCE($12, notes)
+       WHERE id = $1 RETURNING *`,
+      [drugId, sort_order||null, drug_name||null, drug_type||null, base_dose||null,
+       dose_unit||null, dose_per||null, solvent_name||null, solvent_volume||null,
+       route||null, drip_time||null, notes||null]
+    );
+    if (!rows.length) { res.status(404).json({ error: 'Not found' }); return; }
+    res.json(rows[0]);
+  } catch (e) {
+    console.error('PATCH /regimen-master/drugs/:drugId error:', e);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// ── DELETE /api/regimen-check/regimen-master/drugs/:drugId ───
+router.delete('/regimen-master/drugs/:drugId', async (req: AuthRequest, res: Response) => {
+  try {
+    await pool.query(`DELETE FROM regimen_drugs WHERE id = $1`, [req.params.drugId]);
+    res.json({ ok: true });
+  } catch (e) {
+    console.error('DELETE /regimen-master/drugs/:drugId error:', e);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// ── POST /api/regimen-check/regimen-master/:id/toxicity ──────
+router.post('/regimen-master/:id/toxicity', async (req: AuthRequest, res: Response) => {
+  try {
+    const regimenId = Number(req.params.id);
+    const { toxicity_item, grade1_action, grade2_action, grade3_action, grade4_action, notes } = req.body;
+    if (!toxicity_item?.trim()) { res.status(400).json({ error: 'toxicity_item required' }); return; }
+    const { rows } = await pool.query(
+      `INSERT INTO regimen_toxicity_rules
+         (regimen_id, toxicity_item, grade1_action, grade2_action, grade3_action, grade4_action, notes)
+       VALUES ($1,$2,$3,$4,$5,$6,$7)
+       ON CONFLICT (regimen_id, toxicity_item) DO UPDATE SET
+         grade1_action = EXCLUDED.grade1_action,
+         grade2_action = EXCLUDED.grade2_action,
+         grade3_action = EXCLUDED.grade3_action,
+         grade4_action = EXCLUDED.grade4_action,
+         notes         = EXCLUDED.notes
+       RETURNING *`,
+      [regimenId, toxicity_item.trim(),
+       grade1_action || '継続', grade2_action || '減量検討',
+       grade3_action || '休薬または減量', grade4_action || '中止推奨', notes || null]
+    );
+    res.json(rows[0]);
+  } catch (e) {
+    console.error('POST /regimen-master/:id/toxicity error:', e);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// ── PATCH /api/regimen-check/regimen-master/toxicity/:ruleId ─
+router.patch('/regimen-master/toxicity/:ruleId', async (req: AuthRequest, res: Response) => {
+  try {
+    const { ruleId } = req.params;
+    const { toxicity_item, grade1_action, grade2_action, grade3_action, grade4_action, notes } = req.body;
+    const { rows } = await pool.query(
+      `UPDATE regimen_toxicity_rules
+       SET toxicity_item  = COALESCE($2, toxicity_item),
+           grade1_action  = COALESCE($3, grade1_action),
+           grade2_action  = COALESCE($4, grade2_action),
+           grade3_action  = COALESCE($5, grade3_action),
+           grade4_action  = COALESCE($6, grade4_action),
+           notes          = COALESCE($7, notes)
+       WHERE id = $1 RETURNING *`,
+      [ruleId, toxicity_item||null, grade1_action||null, grade2_action||null,
+       grade3_action||null, grade4_action||null, notes||null]
+    );
+    if (!rows.length) { res.status(404).json({ error: 'Not found' }); return; }
+    res.json(rows[0]);
+  } catch (e) {
+    console.error('PATCH /regimen-master/toxicity/:ruleId error:', e);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// ── DELETE /api/regimen-check/regimen-master/toxicity/:ruleId
+router.delete('/regimen-master/toxicity/:ruleId', async (req: AuthRequest, res: Response) => {
+  try {
+    await pool.query(`DELETE FROM regimen_toxicity_rules WHERE id = $1`, [req.params.ruleId]);
+    res.json({ ok: true });
+  } catch (e) {
+    console.error('DELETE /regimen-master/toxicity/:ruleId error:', e);
     res.status(500).json({ error: 'Server error' });
   }
 });

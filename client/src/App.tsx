@@ -12,6 +12,7 @@ import AnnualPage  from './pages/AnnualPage';
 import GuidancePage from './pages/GuidancePage';
 import RegimenCheckPage from './pages/RegimenCheckPage';
 import RegimenCalendarPage from './pages/RegimenCalendarPage';
+import RegimenMasterPage from './pages/RegimenMasterPage';
 import InterventionReportPage from './pages/InterventionReportPage';
 import PasswordChangePage from './pages/PasswordChangePage';
 import PreConsultSettingsPage from './pages/PreConsultSettingsPage';
@@ -97,6 +98,9 @@ function AppRoutes() {
       } />
       <Route path="/admin/auth-logs" element={
         <AdminRoute><AppLayout><AuthLogsPage /></AppLayout></AdminRoute>
+      } />
+      <Route path="/admin/regimen-master" element={
+        <AdminRoute><AppLayout><RegimenMasterPage /></AppLayout></AdminRoute>
       } />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

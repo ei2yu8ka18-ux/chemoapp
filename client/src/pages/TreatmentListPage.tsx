@@ -7,7 +7,7 @@ import {
   Checkbox, FormGroup, Snackbar, Alert,
 } from '@mui/material';
 import { Logout, Add, Remove, Save, TableRows, Warning, InvertColors } from '@mui/icons-material';
-import { useNavigate } from 'react-router-dom';
+
 import { useAuth } from '../contexts/AuthContext';
 import api from '../services/api';
 import { Treatment, BloodResults, TreatmentStatus } from '../types/treatment';
@@ -160,7 +160,6 @@ function loadColWidths(): Record<ColKey, number> {
 
 // ─────────────────────────────────────────────────────────────
 export default function TreatmentListPage() {
-  const navigate = useNavigate();
   const { user, logout } = useAuth();
   const [treatments, setTreatments] = useState<Treatment[]>([]);
   const [loading, setLoading]       = useState(true);
@@ -757,11 +756,11 @@ export default function TreatmentListPage() {
                               overflow: 'hidden',
                             }}>
                               <Typography sx={{
-                                fontSize: '0.6rem',
+                                fontSize: '0.72rem',
                                 fontWeight: grade > 0 ? 'bold' : 'normal',
                                 whiteSpace: 'nowrap',
                               }}>
-                                <span style={{ color: '#888' }}>{f.label}: </span>
+                                <span style={{ color: '#555', fontWeight: 'bold' }}>{f.label}: </span>
                                 <span style={{ color: grade > 0 ? '#333' : '#555' }}>
                                   {numVal != null ? fmtBlood(numVal) : '-'}
                                 </span>
