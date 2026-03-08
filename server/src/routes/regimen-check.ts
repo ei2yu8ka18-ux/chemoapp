@@ -305,11 +305,11 @@ router.patch('/doubts/:id', async (req: AuthRequest, res: Response) => {
     const { status, resolution } = req.body;
     const { rows } = await pool.query(
       `UPDATE regimen_doubts
-       SET status = $2,
-           resolution = $3,
-           resolved_at = CASE WHEN $2 = 'resolved' THEN NOW() ELSE NULL END
+       SET status = $2::text,
+           resolution = $3::text,
+           resolved_at = CASE WHEN $2::text = 'resolved' THEN NOW() ELSE NULL END
        WHERE id = $1 RETURNING *`,
-      [id, status, resolution]
+      [id, status ?? null, resolution ?? null]
     );
     res.json(rows[0]);
   } catch (e) {
