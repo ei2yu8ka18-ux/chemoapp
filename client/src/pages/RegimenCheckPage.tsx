@@ -37,7 +37,12 @@ interface Lab {
   tbil: number | null; crp: number | null;
 }
 interface MedHistory { id: number; condition_name: string; onset_date: string | null; end_date: string | null; notes: string | null; }
-interface Order { id: number; order_date: string; drug_name: string; dose: number | null; dose_unit: string | null; route: string | null; is_antineoplastic: boolean; }
+interface Order {
+  id: number; order_date: string; drug_name: string; dose: number | null;
+  dose_unit: string | null; route: string | null; is_antineoplastic: boolean;
+  bag_no: number | null; solvent_name: string | null; solvent_vol_ml: number | null;
+  bag_order: number; regimen_name: string | null;
+}
 interface TreatmentHistory {
   id: number; scheduled_date: string; status: string; regimen_name: string;
   regimen_id: number; calendar_id: number | null;
@@ -50,6 +55,7 @@ interface TreatmentHistory {
 interface FutureSchedule { order_date: string; antineoplastic_drugs: string; }
 interface Audit { id: number; audit_date: string; pharmacist_name: string; comment: string; handover_note: string; created_at: string; }
 interface Doubt { id: number; doubt_date: string; content: string; status: string; resolution: string | null; pharmacist_name: string; resolved_at: string | null; }
+interface InfectionLab { test_name: string; result: string; test_date: string; }
 interface Detail {
   patient: Patient & { latest_vital: Vital | null };
   vitals: Vital[];
@@ -61,6 +67,7 @@ interface Detail {
   futureSchedule: FutureSchedule[];
   audits: Audit[];
   doubts: Doubt[];
+  infectionLabs: InfectionLab[];
 }
 
 /* ─── ユーティリティ ─────────────────────────────────────── */
@@ -79,6 +86,20 @@ const fmtDateTime = (d: string | null) => {
   if (!d) return '―';
   return d.slice(0, 16).replace('T', ' ');
 };
+
+/* ─── 治療マーク型 ──────────────────────────────────────── */
+interface TreatmentMark { date: string; calStatus: string | null; }
+
+function treatmentMarkColor(status: string | null) {
+  if (status === 'cancelled') return '#c62828';
+  if (status === 'changed')   return '#e65100';
+  return '#1565c0';
+}
+function treatmentMarkLabel(status: string | null) {
+  if (status === 'cancelled') return '×';
+  if (status === 'changed')   return '▲';
+  return '●';
+}
 
 /* ─── グラフ共通ドット（値ラベル付き） ──────────────────── */
 const ChartDot = (props: any) => {
@@ -126,7 +147,7 @@ function VitalChart({ vitals }: { vitals: Vital[] }) {
 }
 
 /* ─── 骨髄系採血グラフ（対数スケール） ──────────────────── */
-function BloodChart({ labs }: { labs: Lab[] }) {
+function BloodChart({ labs, treatmentMarks }: { labs: Lab[], treatmentMarks: TreatmentMark[] }) {
   if (!labs.length) return <Typography variant="body2" color="text.secondary" sx={{ py: 1 }}>データなし</Typography>;
   const data = labs.map(l => ({
     date: shortDate(l.lab_date),
@@ -150,6 +171,11 @@ function BloodChart({ labs }: { labs: Lab[] }) {
           label={{ value: 'ANC 1.0', fontSize: 8, fill: '#e53935' }} />
         <ReferenceLine y={0.5} stroke="#b71c1c" strokeDasharray="4 2"
           label={{ value: '0.5', fontSize: 8, fill: '#b71c1c' }} />
+        {treatmentMarks.map(m => (
+          <ReferenceLine key={m.date} x={m.date} stroke={treatmentMarkColor(m.calStatus)} strokeWidth={1.5} strokeOpacity={0.7}>
+            <Label value={treatmentMarkLabel(m.calStatus)} position="insideTopRight" style={{ fontSize: 9, fill: treatmentMarkColor(m.calStatus), fontWeight: 'bold' }} />
+          </ReferenceLine>
+        ))}
         {(Object.keys(colors) as (keyof typeof colors)[]).map(k => (
           <Line key={k} type="monotone" dataKey={k} stroke={colors[k]} strokeWidth={1.5}
             dot={<ChartDot dataKey={k} fill={colors[k]} />} connectNulls />
@@ -160,7 +186,7 @@ function BloodChart({ labs }: { labs: Lab[] }) {
 }
 
 /* ─── 腎機能グラフ ──────────────────────────────────────── */
-function RenalChart({ labs }: { labs: Lab[] }) {
+function RenalChart({ labs, treatmentMarks }: { labs: Lab[], treatmentMarks: TreatmentMark[] }) {
   if (!labs.length) return null;
   const data = labs.map(l => ({ date: shortDate(l.lab_date), CRE: l.cre ? Number(l.cre) : null, eGFR: l.egfr ? Number(l.egfr) : null }));
   return (
@@ -177,6 +203,11 @@ function RenalChart({ labs }: { labs: Lab[] }) {
         <RechartTooltip formatter={(v: any, n?: any) => [v, n ?? '']} />
         <Legend wrapperStyle={{ fontSize: 10 }} />
         <ReferenceLine yAxisId="l" y={1.0} stroke="#f57f17" strokeDasharray="4 2" />
+        {treatmentMarks.map(m => (
+          <ReferenceLine key={m.date} yAxisId="l" x={m.date} stroke={treatmentMarkColor(m.calStatus)} strokeWidth={1.5} strokeOpacity={0.7}>
+            <Label value={treatmentMarkLabel(m.calStatus)} position="insideTopRight" style={{ fontSize: 9, fill: treatmentMarkColor(m.calStatus), fontWeight: 'bold' }} />
+          </ReferenceLine>
+        ))}
         <Line yAxisId="l" type="monotone" dataKey="CRE" stroke="#0288d1" strokeWidth={1.5}
           dot={<ChartDot dataKey="CRE" fill="#0288d1" />} connectNulls />
         <Line yAxisId="r" type="monotone" dataKey="eGFR" stroke="#00838f" strokeWidth={1.5}
@@ -187,7 +218,7 @@ function RenalChart({ labs }: { labs: Lab[] }) {
 }
 
 /* ─── 肝機能グラフ ──────────────────────────────────────── */
-function HepaticChart({ labs }: { labs: Lab[] }) {
+function HepaticChart({ labs, treatmentMarks }: { labs: Lab[], treatmentMarks: TreatmentMark[] }) {
   if (!labs.length) return null;
   const data = labs.map(l => ({
     date: shortDate(l.lab_date),
@@ -202,6 +233,11 @@ function HepaticChart({ labs }: { labs: Lab[] }) {
         <YAxis tick={{ fontSize: 9 }} />
         <RechartTooltip formatter={(v: any, n?: any) => [n === 'TBil' ? (Number(v) / 10).toFixed(2) + '(×10)' : v, n ?? '']} />
         <Legend wrapperStyle={{ fontSize: 10 }} formatter={(v) => v === 'TBil' ? 'T-Bil×10' : v} />
+        {treatmentMarks.map(m => (
+          <ReferenceLine key={m.date} x={m.date} stroke={treatmentMarkColor(m.calStatus)} strokeWidth={1.5} strokeOpacity={0.7}>
+            <Label value={treatmentMarkLabel(m.calStatus)} position="insideTopRight" style={{ fontSize: 9, fill: treatmentMarkColor(m.calStatus), fontWeight: 'bold' }} />
+          </ReferenceLine>
+        ))}
         <Line type="monotone" dataKey="AST" stroke="#7b1fa2" strokeWidth={1.5} dot={<ChartDot dataKey="AST" fill="#7b1fa2" />} connectNulls />
         <Line type="monotone" dataKey="ALT" stroke="#ad1457" strokeWidth={1.5} dot={<ChartDot dataKey="ALT" fill="#ad1457" />} connectNulls />
         <Line type="monotone" dataKey="TBil" stroke="#f4511e" strokeWidth={1.5} dot={<ChartDot dataKey="TBil" fill="#f4511e" />} connectNulls />
@@ -236,11 +272,15 @@ function AuditStatusChip({ status }: { status: string | null }) {
   return <Chip label="未監査" size="small" sx={{ bgcolor: '#fff9c4', color: '#f57f17', fontSize: '0.62rem', height: 16, fontWeight: 'bold' }} />;
 }
 
-/* ─── オーダーカラム（投与量編集） ──────────────────────── */
+/* ─── オーダー点滴説明書形式表示（バッグ別） ──────────────── */
+const BAG_NUMS = ['①', '②', '③', '④', '⑤', '⑥', '⑦', '⑧', '⑨', '⑩'];
+
 function OrderColumn({
-  orders, label, dateStr, onReload,
+  orders, label, dateStr, onReload, compareOrders,
 }: {
-  orders: Order[]; label: string; dateStr: string; onReload?: () => void;
+  orders: Order[]; label: string; dateStr: string;
+  onReload?: () => void;
+  compareOrders?: Order[];  // 比較用（dose 差異チェック）
 }) {
   const [doseEdits, setDoseEdits] = useState<Record<number, string>>({});
 
@@ -256,62 +296,123 @@ function OrderColumn({
     setDoseEdits(prev => { const m = { ...prev }; delete m[o.id]; return m; });
   };
 
-  const anti = orders.filter(o => o.is_antineoplastic);
-  const other = orders.filter(o => !o.is_antineoplastic);
   if (!orders.length) return (
     <Box sx={{ textAlign: 'center', py: 2 }}>
       <Typography variant="body2" color="text.secondary">{label}（{dateStr}）：オーダーなし</Typography>
     </Box>
   );
 
-  const renderRow = (o: Order, isAnti: boolean) => {
+  // レジメン名（最初のオーダーから取得）
+  const regimenName = orders.find(o => o.regimen_name)?.regimen_name || '';
+
+  // バッグあり → bag_no でグループ化
+  const bagOrders = orders.filter(o => o.bag_no != null);
+  const noBagOrders = orders.filter(o => o.bag_no == null);
+
+  // bag_no ごとにグループ化してソート
+  const bagGroups: Record<number, Order[]> = {};
+  for (const o of bagOrders) {
+    const k = o.bag_no as number;
+    if (!bagGroups[k]) bagGroups[k] = [];
+    bagGroups[k].push(o);
+  }
+  const sortedBagNos = Object.keys(bagGroups).map(Number).sort((a, b) => a - b);
+
+  // 比較用 drug_name → dose マップ
+  const compareMap: Record<string, number | null> = {};
+  if (compareOrders) {
+    for (const o of compareOrders) { compareMap[o.drug_name] = o.dose ?? null; }
+  }
+
+  const renderDrugRow = (o: Order, indent: boolean) => {
     const editing = doseEdits[o.id] !== undefined;
+    const compareDose = compareMap[o.drug_name];
+    const hasDiff = compareOrders !== undefined
+      && compareDose !== undefined
+      && compareDose !== (o.dose ?? null);
     return (
-      <TableRow key={o.id} sx={{ bgcolor: isAnti ? '#fff8f0' : undefined }}>
-        <TableCell sx={{ fontSize: '0.75rem', py: 0.3, fontWeight: isAnti ? 'bold' : 'normal', color: isAnti ? '#b71c1c' : 'inherit' }}>
+      <Box key={o.id} sx={{
+        display: 'flex', alignItems: 'center', gap: 0.5, py: 0.15,
+        pl: indent ? 2.5 : 0.3,
+      }}>
+        {hasDiff && <Warning sx={{ fontSize: 11, color: '#f57f17', flexShrink: 0 }} />}
+        <Typography sx={{
+          fontSize: '0.73rem', flex: 1,
+          color: o.is_antineoplastic ? '#b71c1c' : '#333',
+          fontWeight: o.is_antineoplastic ? 'bold' : 'normal',
+          lineHeight: 1.4,
+        }}>
           {o.drug_name}
-        </TableCell>
-        <TableCell sx={{ py: 0.2 }} align="right">
-          <TextField
-            value={editing ? doseEdits[o.id] : (o.dose ?? '')}
-            onChange={e => setDoseEdits(prev => ({ ...prev, [o.id]: e.target.value }))}
-            onBlur={() => handleDoseSave(o)}
-            onKeyDown={e => { if (e.key === 'Enter') handleDoseSave(o); }}
-            size="small"
-            placeholder="―"
-            sx={{
-              width: 65,
-              '& .MuiInputBase-input': { fontSize: '0.75rem', py: 0.2, px: 0.5, textAlign: 'right' },
-            }}
-          />
-        </TableCell>
-        <TableCell sx={{ fontSize: '0.75rem', py: 0.3 }}>{o.dose_unit ?? ''}</TableCell>
-      </TableRow>
+        </Typography>
+        <TextField
+          value={editing ? doseEdits[o.id] : (o.dose ?? '')}
+          onChange={e => setDoseEdits(prev => ({ ...prev, [o.id]: e.target.value }))}
+          onBlur={() => handleDoseSave(o)}
+          onKeyDown={e => { if (e.key === 'Enter') handleDoseSave(o); }}
+          size="small" placeholder="―"
+          sx={{
+            width: 60, flexShrink: 0,
+            '& .MuiInputBase-input': {
+              fontSize: '0.72rem', py: 0.15, px: 0.4, textAlign: 'right',
+              color: hasDiff ? '#c62828' : 'inherit',
+              fontWeight: hasDiff ? 'bold' : 'normal',
+            },
+          }}
+        />
+        <Typography sx={{ fontSize: '0.68rem', color: '#666', whiteSpace: 'nowrap', minWidth: 24 }}>
+          {o.dose_unit ?? ''}
+        </Typography>
+      </Box>
     );
   };
 
   return (
     <Box>
-      <Typography variant="caption" sx={{ fontWeight: 'bold', color: '#c62828', display: 'block', mb: 0.5 }}>
+      <Typography variant="caption" sx={{ fontWeight: 'bold', color: '#c62828', display: 'block', mb: 0.3, fontSize: '0.78rem' }}>
         {label}　{dateStr}
       </Typography>
-      <TableContainer component={Paper} variant="outlined">
-        <Table size="small">
-          <TableHead sx={{ bgcolor: anti.length ? '#fce4e4' : '#f5f5f5' }}>
-            <TableRow>
-              <TableCell sx={{ fontSize: '0.7rem', py: 0.4, fontWeight: 'bold' }}>薬品名</TableCell>
-              <TableCell sx={{ fontSize: '0.7rem', py: 0.4, fontWeight: 'bold' }} align="right">用量</TableCell>
-              <TableCell sx={{ fontSize: '0.7rem', py: 0.4, fontWeight: 'bold' }}>単位</TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {anti.length > 0 && <TableRow><TableCell colSpan={3} sx={{ fontSize: '0.68rem', bgcolor: '#fff3e0', py: 0.2, fontWeight: 'bold' }}>■ 抗腫瘍薬</TableCell></TableRow>}
-            {anti.map(o => renderRow(o, true))}
-            {other.length > 0 && <TableRow><TableCell colSpan={3} sx={{ fontSize: '0.68rem', bgcolor: '#f5f5f5', py: 0.2 }}>■ 支持療法</TableCell></TableRow>}
-            {other.map(o => renderRow(o, false))}
-          </TableBody>
-        </Table>
-      </TableContainer>
+      {regimenName && (
+        <Typography sx={{ fontSize: '0.72rem', color: '#1a237e', fontWeight: 'bold', mb: 0.5 }}>
+          📋 {regimenName}
+        </Typography>
+      )}
+      <Paper variant="outlined" sx={{ p: 0.8 }}>
+        {/* バッグあり（点滴説明書形式） */}
+        {sortedBagNos.map((bagNo, idx) => {
+          const drugs = bagGroups[bagNo];
+          const solvent = drugs.find(o => o.solvent_name);
+          const bagSymbol = BAG_NUMS[idx] ?? `(${bagNo})`;
+          return (
+            <Box key={bagNo} sx={{ mb: 0.8 }}>
+              {/* 溶媒ヘッダー */}
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, borderBottom: '1px solid #e0e0e0', pb: 0.2, mb: 0.15 }}>
+                <Typography sx={{ fontSize: '0.78rem', fontWeight: 'bold', color: '#37474f', flexShrink: 0 }}>
+                  {bagSymbol}
+                </Typography>
+                {solvent ? (
+                  <Typography sx={{ fontSize: '0.73rem', color: '#37474f' }}>
+                    {solvent.solvent_name}{solvent.solvent_vol_ml ? `　${solvent.solvent_vol_ml}mL` : ''}
+                  </Typography>
+                ) : (
+                  <Typography sx={{ fontSize: '0.73rem', color: '#888' }}>（溶媒未登録）</Typography>
+                )}
+              </Box>
+              {/* このバッグの薬品 */}
+              {drugs.sort((a, b) => a.bag_order - b.bag_order).map(o => renderDrugRow(o, true))}
+            </Box>
+          );
+        })}
+
+        {/* バッグなし（皮下注・経口等） */}
+        {noBagOrders.length > 0 && (
+          <Box sx={{ mt: sortedBagNos.length > 0 ? 0.8 : 0, borderTop: sortedBagNos.length > 0 ? '1px dashed #ccc' : undefined, pt: sortedBagNos.length > 0 ? 0.5 : 0 }}>
+            {sortedBagNos.length > 0 && (
+              <Typography sx={{ fontSize: '0.65rem', color: '#888', mb: 0.3 }}>その他（皮下注・経口等）</Typography>
+            )}
+            {noBagOrders.map(o => renderDrugRow(o, false))}
+          </Box>
+        )}
+      </Paper>
     </Box>
   );
 }
@@ -446,7 +547,7 @@ export default function RegimenCheckPage() {
         });
       }
       if (selectedId) loadDetail(selectedId);
-    } catch { /* ignore */ }
+    } catch (e) { console.error('Cycle保存エラー:', e); }
   };
 
   // 監査ステータス設定（個別）
@@ -456,12 +557,15 @@ export default function RegimenCheckPage() {
       await api.patch(`${API}/calendar/audit-status`, {
         patient_id: selectedId,
         regimen_id: t.regimen_id,
-        treatment_date: t.scheduled_date,
+        treatment_date: t.scheduled_date?.slice(0, 10),
         audit_status: actualStatus,
         auditor_name: actualStatus ? (user?.displayName || '') : null,
       });
-      if (selectedId) { loadDetail(selectedId); loadPatients(); }
-    } catch { /* ignore */ }
+      if (selectedId) { await loadDetail(selectedId); await loadPatients(); }
+    } catch (e) {
+      console.error('監査ステータス更新エラー:', e);
+      setError('監査ステータスの更新に失敗しました');
+    }
   };
 
   // 一括監査ステータス変更
@@ -473,13 +577,16 @@ export default function RegimenCheckPage() {
       await Promise.all(items.map(t => api.patch(`${API}/calendar/audit-status`, {
         patient_id: selectedId,
         regimen_id: t.regimen_id,
-        treatment_date: t.scheduled_date,
+        treatment_date: t.scheduled_date?.slice(0, 10),
         audit_status: newStatus,
         auditor_name: newStatus ? (user?.displayName || '') : null,
       })));
       setSelectedHistoryIds(new Set());
       await loadDetail(selectedId);
       await loadPatients();
+    } catch (e) {
+      console.error('一括監査更新エラー:', e);
+      setError('一括監査ステータスの更新に失敗しました');
     } finally { setBatchLoading(false); }
   };
 
@@ -515,6 +622,22 @@ export default function RegimenCheckPage() {
     const found = detail.treatmentHistory.find(t => (t.scheduled_date?.slice(0, 10) || '') > todayStr);
     return found?.scheduled_date?.slice(0, 10) || null;
   }, [detail?.treatmentHistory, todayStr]);
+
+  // グラフ用治療マーク（採血日と一致する治療日のみ）
+  const treatmentMarks = useMemo((): TreatmentMark[] => {
+    if (!detail?.treatmentHistory || !detail?.labs) return [];
+    const labDateSet = new Set(detail.labs.map(l => shortDate(l.lab_date)));
+    const seen = new Set<string>();
+    const marks: TreatmentMark[] = [];
+    for (const t of detail.treatmentHistory) {
+      const d = shortDate(t.scheduled_date?.slice(0, 10) || null);
+      if (d && d !== '―' && labDateSet.has(d) && !seen.has(d)) {
+        seen.add(d);
+        marks.push({ date: d, calStatus: t.calendar_status || t.status });
+      }
+    }
+    return marks;
+  }, [detail?.treatmentHistory, detail?.labs]);
 
   return (
     <Box sx={{ display: 'flex', height: '100vh', overflow: 'hidden' }}>
@@ -583,6 +706,34 @@ export default function RegimenCheckPage() {
                 </Box>
               )}
             </Box>
+
+            {/* 感染症バー（ヘッダー直下） */}
+            {detail?.infectionLabs && detail.infectionLabs.length > 0 && (
+              <Box sx={{ px: 2, py: 0.5, borderBottom: '1px solid #ddd', bgcolor: '#fff8e1', display: 'flex', alignItems: 'center', gap: 1.2, flexShrink: 0, flexWrap: 'wrap' }}>
+                <Typography sx={{ fontSize: '0.72rem', fontWeight: 'bold', color: '#e65100', whiteSpace: 'nowrap' }}>🦠 感染症</Typography>
+                {(['HBs抗原', 'HBs抗体', 'HBc抗体', 'HBVDNA定量'] as const).map(name => {
+                  const lab = detail.infectionLabs.find(l => l.test_name === name);
+                  if (!lab) return null;
+                  const isPositive = lab.result.includes('陽性') || (name === 'HBVDNA定量' && !lab.result.includes('検出せず'));
+                  return (
+                    <Tooltip key={name} title={`最終検査日: ${fmtDate(lab.test_date)}`} placement="bottom">
+                      <Chip
+                        label={`${name}: ${lab.result}`}
+                        size="small"
+                        sx={{
+                          fontSize: '0.65rem', height: 18,
+                          bgcolor: isPositive ? '#ffebee' : '#f1f8e9',
+                          color: isPositive ? '#c62828' : '#33691e',
+                          fontWeight: isPositive ? 'bold' : 'normal',
+                          border: isPositive ? '1px solid #ef9a9a' : '1px solid #c5e1a5',
+                          cursor: 'default',
+                        }}
+                      />
+                    </Tooltip>
+                  );
+                })}
+              </Box>
+            )}
 
             {/* 既往歴バー（ヘッダー直下） */}
             <Box
@@ -803,16 +954,29 @@ export default function RegimenCheckPage() {
             {/* ━━━━ ② オーダー確認（左右比較） ━━━━ */}
             <Paper variant="outlined" sx={{ mb: 1.5, p: 1.2 }}>
               <SectionHeader color="#c62828">📋 オーダー確認（今回 vs 次回）</SectionHeader>
+              {(detail.todayOrders.length > 0 || detail.futureOrders.length > 0) && (
+                <Box sx={{ fontSize: '0.65rem', color: '#888', mb: 0.8 }}>
+                  ● 実施　▲ 変更あり　× 中止　⚠️ 今回と次回で用量が異なる薬品
+                </Box>
+              )}
               <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1.5 }}>
-                <OrderColumn orders={detail.todayOrders} label="今回オーダー" dateStr={fmtDate(todayStr)} onReload={() => selectedId && loadDetail(selectedId)} />
-                <OrderColumn orders={detail.futureOrders} label="次回オーダー" dateStr={fmtDate(futureDate)} onReload={() => selectedId && loadDetail(selectedId)} />
+                <OrderColumn
+                  orders={detail.todayOrders} label="今回オーダー" dateStr={fmtDate(todayStr)}
+                  onReload={() => selectedId && loadDetail(selectedId)}
+                  compareOrders={detail.futureOrders}
+                />
+                <OrderColumn
+                  orders={detail.futureOrders} label="次回オーダー" dateStr={fmtDate(futureDate)}
+                  onReload={() => selectedId && loadDetail(selectedId)}
+                  compareOrders={detail.todayOrders}
+                />
               </Box>
             </Paper>
 
             {/* ━━━━ ③ 採血グラフ ━━━━ */}
             <Paper variant="outlined" sx={{ mb: 1.5, p: 1.2 }}>
               <SectionHeader color="#2e7d32">🩸 骨髄系採血（対数スケール）　WBC・ANC（×10³/μL）　Plt（×10⁴/μL）　Hgb（g/dL）　Mono（×10³/μL）</SectionHeader>
-              <BloodChart labs={detail.labs} />
+              <BloodChart labs={detail.labs} treatmentMarks={treatmentMarks} />
             </Paper>
 
             {/* ━━━━ ④ 体格・腎肝機能（3列） ━━━━ */}
@@ -823,11 +987,11 @@ export default function RegimenCheckPage() {
               </Paper>
               <Paper variant="outlined" sx={{ p: 1.2 }}>
                 <SectionHeader color="#0277bd">🫘 腎機能（Cre / eGFR）</SectionHeader>
-                <RenalChart labs={detail.labs} />
+                <RenalChart labs={detail.labs} treatmentMarks={treatmentMarks} />
               </Paper>
               <Paper variant="outlined" sx={{ p: 1.2 }}>
                 <SectionHeader color="#6a1b9a">🫀 肝機能（AST / ALT / T-Bil×10 / CRP）</SectionHeader>
-                <HepaticChart labs={detail.labs} />
+                <HepaticChart labs={detail.labs} treatmentMarks={treatmentMarks} />
               </Paper>
             </Box>
 

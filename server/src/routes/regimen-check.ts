@@ -96,11 +96,13 @@ router.get('/:patientId/detail', async (req: AuthRequest, res: Response) => {
     // 本日のオーダー
     const { rows: todayOrders } = await pool.query(
       `SELECT po.id, po.patient_id, po.order_date, po.drug_name,
-         po.dose, po.dose_unit, po.route, po.is_antineoplastic
+         po.dose, po.dose_unit, po.route, po.is_antineoplastic,
+         po.bag_no, po.solvent_name, po.solvent_vol_ml, po.bag_order,
+         po.regimen_name
        FROM patient_orders po
        WHERE po.patient_id = $1
          AND po.order_date = CURRENT_DATE
-       ORDER BY po.is_antineoplastic DESC, po.drug_name`,
+       ORDER BY po.bag_no NULLS LAST, po.bag_order, po.is_antineoplastic DESC, po.drug_name`,
       [patientId]
     );
 
@@ -115,10 +117,11 @@ router.get('/:patientId/detail', async (req: AuthRequest, res: Response) => {
     if (futureOrderDates.length > 0) {
       const futureDate = futureOrderDates[0].order_date;
       const { rows } = await pool.query(
-        `SELECT id, patient_id, order_date, drug_name, dose, dose_unit, route, is_antineoplastic
+        `SELECT id, patient_id, order_date, drug_name, dose, dose_unit, route, is_antineoplastic,
+           bag_no, solvent_name, solvent_vol_ml, bag_order, regimen_name
          FROM patient_orders
          WHERE patient_id = $1 AND order_date = $2
-         ORDER BY is_antineoplastic DESC, drug_name`,
+         ORDER BY bag_no NULLS LAST, bag_order, is_antineoplastic DESC, drug_name`,
         [patientId, futureDate]
       );
       futureOrders = rows;
@@ -200,6 +203,16 @@ router.get('/:patientId/detail', async (req: AuthRequest, res: Response) => {
       [patientId]
     );
 
+    // 感染症検査（test_name ごとに最新の1件）
+    const { rows: infectionLabs } = await pool.query(
+      `SELECT DISTINCT ON (test_name)
+         test_name, result, test_date
+       FROM patient_infection_labs
+       WHERE patient_id = $1
+       ORDER BY test_name, test_date DESC`,
+      [patientId]
+    );
+
     res.json({
       patient: { ...patient, latest_vital: latestVital },
       vitals: vitalsWithBSA,
@@ -211,6 +224,7 @@ router.get('/:patientId/detail', async (req: AuthRequest, res: Response) => {
       futureSchedule,
       audits,
       doubts,
+      infectionLabs,
     });
   } catch (e) {
     console.error('GET /:patientId/detail error:', e);

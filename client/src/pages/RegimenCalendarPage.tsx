@@ -60,7 +60,12 @@ function addMonths(date: Date, months: number): Date {
   d.setMonth(d.getMonth() + months);
   return d;
 }
-function toDateStr(d: Date): string { return d.toISOString().split('T')[0]; }
+function toDateStr(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
 function parseDate(s: string): Date { return new Date(s + 'T00:00:00'); }
 function daysBetween(a: string, b: string): number {
   return Math.round((parseDate(b).getTime() - parseDate(a).getTime()) / 86400000);
