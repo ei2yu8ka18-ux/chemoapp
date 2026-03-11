@@ -4,10 +4,17 @@ import { authenticateToken, AuthRequest } from '../middleware/auth';
 
 const router = Router();
 router.use(authenticateToken);
+const MIN_ANNUAL_YEAR = 2026;
 
 // GET /annual?year=2025
 router.get('/', async (req: AuthRequest, res: Response) => {
-  const year = parseInt(req.query.year as string) || new Date().getFullYear();
+  const requestedYear = parseInt(req.query.year as string, 10);
+  const currentYear = new Date().getFullYear();
+  const year = Number.isNaN(requestedYear) ? Math.max(currentYear, MIN_ANNUAL_YEAR) : requestedYear;
+  if (year < MIN_ANNUAL_YEAR) {
+    res.status(400).json({ error: `${MIN_ANNUAL_YEAR}年度以降を指定してください` });
+    return;
+  }
 
   const [injR, diaryR, intR, deptR, catR, regR] = await Promise.all([
 

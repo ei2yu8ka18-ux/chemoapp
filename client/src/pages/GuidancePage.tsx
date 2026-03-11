@@ -129,8 +129,7 @@ function extractVol(name: string): number | null {
   return m ? parseInt(m[1]) : null;
 }
 
-function selectImage(code: string, rawName: string): string | null {
-  if (code === 'I20118') return 'sc.png';
+function selectImage(_code: string, rawName: string): string | null {
   const vol = extractVol(rawName);
   if (/生食|生理食塩/.test(rawName)) {
     if (vol === 10)  return 'ns10.png';
@@ -197,21 +196,27 @@ function parseOrderRows(rows: OrderRow[]): PatientSheet[] {
 
       let img: string | null = takeHome ? 'pomp.png' : null;
       if (!img) {
-        // 生食(ns*.png)より糖液・ソリタ等を優先して選択
-        let nsImg: string | null = null;
-        for (const r of oRows) {
-          if (skipLevo && /レボホリナート/.test(r.drug_name)) continue;
-          const found = selectImage(r.drug_code, r.drug_name);
-          if (found) {
-            if (found.startsWith('ns')) {
-              if (!nsImg) nsImg = found;   // 生食: 記憶しておき探索継続
-            } else {
-              img = found;                  // 非生食(糖液等): 優先採用
-              break;
+        // SC投与（皮下注射）は sc.png を優先
+        const isSC = oRows.some(r => r.drug_code_sc === 'I20118');
+        if (isSC) {
+          img = 'sc.png';
+        } else {
+          // 生食(ns*.png)より糖液・ソリタ等を優先して選択
+          let nsImg: string | null = null;
+          for (const r of oRows) {
+            if (skipLevo && /レボホリナート/.test(r.drug_name)) continue;
+            const found = selectImage(r.drug_code, r.drug_name);
+            if (found) {
+              if (found.startsWith('ns')) {
+                if (!nsImg) nsImg = found;   // 生食: 記憶しておき探索継続
+              } else {
+                img = found;                  // 非生食(糖液等): 優先採用
+                break;
+              }
             }
           }
+          if (!img) img = nsImg ?? 'ns100.png';
         }
-        if (!img) img = nsImg ?? 'ns100.png';
       }
 
       const nameMap = new Map<string, boolean>(); // name → isHR
@@ -288,8 +293,8 @@ function ExplanationSheet({ ps }: { ps: PatientSheet }) {
               <Typography sx={{ fontSize: '0.75rem', fontWeight: 'bold', color: '#555' }}>
                 {LABELS[grp.index] ?? ''}
               </Typography>
-              {/* 点滴袋画像 + vesicant付箋オーバーレイ */}
-              <Box sx={{ width: 72, height: 76, display: 'flex', alignItems: 'center', justifyContent: 'center', my: '1mm', position: 'relative' }}>
+              {/* 点滴袋画像 */}
+              <Box sx={{ width: 72, height: 76, display: 'flex', alignItems: 'center', justifyContent: 'center', my: '1mm' }}>
                 {grp.image ? (
                   <img
                     src={`/images/drug-bags/${grp.image}`}
@@ -301,18 +306,6 @@ function ExplanationSheet({ ps }: { ps: PatientSheet }) {
                   <Box sx={{ width: 60, height: 70, border: '1px solid #aaa', borderRadius: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                     <Typography sx={{ fontSize: '0.6rem', color: '#999' }}>袋</Typography>
                   </Box>
-                )}
-                {/* vesicant / warning 付箋 */}
-                {grp.vesicantType && (
-                  <img
-                    src={`/images/drug-bags/${grp.vesicantType}.png`}
-                    alt={grp.vesicantType}
-                    style={{
-                      position: 'absolute', top: 0, right: 0,
-                      width: 45, height: 45, objectFit: 'contain', zIndex: 2,
-                    }}
-                    onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }}
-                  />
                 )}
               </Box>
               {grp.duration && (
@@ -331,6 +324,15 @@ function ExplanationSheet({ ps }: { ps: PatientSheet }) {
                   {entry.text}
                 </Typography>
               ))}
+              {/* vesicant / warning 付箋（薬剤名の下） */}
+              {grp.vesicantType && (
+                <img
+                  src={`/images/drug-bags/${grp.vesicantType}.png`}
+                  alt={grp.vesicantType}
+                  style={{ width: 45, height: 45, objectFit: 'contain', marginTop: '1mm' }}
+                  onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                />
+              )}
             </Box>
           </Box>
         ))}
@@ -385,6 +387,11 @@ export default function GuidancePage() {
   const [loading, setLoading]     = useState(false);
   const [error, setError]         = useState<string | null>(null);
   const [printAll, setPrintAll]   = useState(false);
+  const [sheetScale, setSheetScale] = useState(100);
+  const [printSheetScale, setPrintSheetScale] = useState(100);
+  const previewScale = sheetScale / 100;
+  const printScale = printSheetScale / 100;
+  const scaleOptions = [90, 100, 110, 120, 130];
 
   // 取り込みボタン → APIコール
   const fetchOrders = useCallback(async () => {
@@ -417,7 +424,7 @@ export default function GuidancePage() {
   // 個別印刷（選択患者）
   const handleSinglePrint = useCallback(() => {
     setPrintAll(false);
-    setTimeout(() => window.print(), 50);
+    setTimeout(() => window.print(), 120);
   }, []);
 
   // printAll がtrueになったらRe-renderの後に印刷
@@ -426,7 +433,7 @@ export default function GuidancePage() {
       const timer = setTimeout(() => {
         window.print();
         setPrintAll(false);
-      }, 100);
+      }, 160);
       return () => clearTimeout(timer);
     }
   }, [printAll]);
@@ -545,7 +552,7 @@ export default function GuidancePage() {
         <Box sx={{ flexGrow: 1, overflow: 'auto', p: 2, bgcolor: '#e8e8e8' }}>
           {selected ? (
             <>
-              <Box sx={{ mb: 1.5, display: 'flex', gap: 1, alignItems: 'center' }}>
+              <Box sx={{ mb: 1.5, display: 'flex', gap: 1, alignItems: 'center', flexWrap: 'wrap' }}>
                 <Button
                   variant="outlined"
                   size="small"
@@ -553,15 +560,51 @@ export default function GuidancePage() {
                   onClick={handleSinglePrint}
                   sx={{ fontSize: '0.75rem' }}
                 >
-                  この患者のみ印刷
+                  {'\u3053\u306E\u60A3\u8005\u306E\u307F\u5370\u5237'}
                 </Button>
                 <Typography sx={{ fontSize: '0.72rem', color: '#666' }}>
-                  {selected.patientName} 様
+                  {selected.patientName} {'\u69D8'}
                 </Typography>
+                <Typography sx={{ ml: 1, fontSize: '0.7rem', color: '#666' }}>{'\u8868\u793A\u500D\u7387'}</Typography>
+                {scaleOptions.map(scale => (
+                  <Chip
+                    key={scale}
+                    size="small"
+                    label={`${scale}%`}
+                    clickable
+                    color={sheetScale === scale ? 'primary' : 'default'}
+                    variant={sheetScale === scale ? 'filled' : 'outlined'}
+                    onClick={() => setSheetScale(scale)}
+                    sx={{ fontSize: '0.68rem', height: 22 }}
+                  />
+                ))}
+                <Typography sx={{ ml: 1, fontSize: '0.7rem', color: '#666' }}>{'\u5370\u5237\u500D\u7387'}</Typography>
+                {scaleOptions.map(scale => (
+                  <Chip
+                    key={`print-${scale}`}
+                    size="small"
+                    label={`${scale}%`}
+                    clickable
+                    color={printSheetScale === scale ? 'success' : 'default'}
+                    variant={printSheetScale === scale ? 'filled' : 'outlined'}
+                    onClick={() => setPrintSheetScale(scale)}
+                    sx={{ fontSize: '0.68rem', height: 22 }}
+                  />
+                ))}
               </Box>
-              <Paper elevation={3} sx={{ maxWidth: 900, mx: 'auto' }}>
-                <ExplanationSheet ps={selected} />
-              </Paper>
+              <Box
+                sx={{
+                  maxWidth: 900,
+                  mx: 'auto',
+                  transform: `scale(${previewScale})`,
+                  transformOrigin: 'top center',
+                  width: `calc(100% / ${previewScale})`,
+                }}
+              >
+                <Paper elevation={3} sx={{ maxWidth: 900, mx: 'auto' }}>
+                  <ExplanationSheet ps={selected} />
+                </Paper>
+              </Box>
             </>
           ) : (
             <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
@@ -577,12 +620,30 @@ export default function GuidancePage() {
       {printAll
         ? patients.map(p => (
             <Box key={p.patientId} className="print-sheet">
-              <ExplanationSheet ps={p} />
+              <Box
+                className="print-sheet-inner"
+                sx={{
+                  transform: `scale(${printScale})`,
+                  transformOrigin: 'top left',
+                  width: `calc(100% / ${printScale})`,
+                }}
+              >
+                <ExplanationSheet ps={p} />
+              </Box>
             </Box>
           ))
         : selected && (
             <Box className="print-sheet">
-              <ExplanationSheet ps={selected} />
+              <Box
+                className="print-sheet-inner"
+                sx={{
+                  transform: `scale(${printScale})`,
+                  transformOrigin: 'top left',
+                  width: `calc(100% / ${printScale})`,
+                }}
+              >
+                <ExplanationSheet ps={selected} />
+              </Box>
             </Box>
           )
       }

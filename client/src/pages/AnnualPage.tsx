@@ -41,6 +41,7 @@ interface AnnualData {
 
 // ─── 定数・ヘルパー ───────────────────────────────────────────────
 const MONTHS = [1,2,3,4,5,6,7,8,9,10,11,12];
+const MIN_ANNUAL_YEAR = 2026;
 const MN     = (m: number) => `${m}月`;
 const v      = (n: number | undefined | null): number => n ?? 0;
 const dash   = (n: number) => n === 0 ? '-' : String(n);
@@ -470,12 +471,16 @@ function AnnualReport({ data }: { data: AnnualData }) {
 export default function AnnualPage() {
   const { user, logout } = useAuth();
   const currentYear = new Date().getFullYear();
-  const [year,    setYear]    = useState(currentYear);
+  const latestYear = Math.max(currentYear, MIN_ANNUAL_YEAR);
+  const [year,    setYear]    = useState(latestYear);
   const [data,    setData]    = useState<AnnualData | null>(null);
   const [loading, setLoading] = useState(false);
   const [error,   setError]   = useState<string | null>(null);
 
-  const yearOptions = Array.from({ length: 6 }, (_, i) => currentYear - i);
+  const yearOptions = Array.from(
+    { length: latestYear - MIN_ANNUAL_YEAR + 1 },
+    (_, i) => latestYear - i
+  );
 
   const fetchAnnual = useCallback(async () => {
     setLoading(true);

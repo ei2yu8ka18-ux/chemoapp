@@ -7,30 +7,18 @@ router.use(authenticateToken);
 
 // ── DBから自動集計 ─────────────────────────────────────────
 async function calcAutoStats(date: string) {
-  // 注射のみ（treatment_category = '注射' または NULL）
+  // 注射件数（treatment_category 列なし → 全件を注射として扱う）
   const { rows: statusRows } = await pool.query(
     `SELECT status, COUNT(*) AS cnt FROM scheduled_treatments
      WHERE scheduled_date = $1
-       AND COALESCE(treatment_category, '注射') = '注射'
      GROUP BY status`,
     [date]
   );
   const statusMap: Record<string, number> = {};
   statusRows.forEach((r: any) => { statusMap[r.status] = Number(r.cnt); });
 
-  // 内服件数
-  const { rows: oralRows } = await pool.query(
-    `SELECT
-       COUNT(*) FILTER (WHERE status IN ('done','pending','changed','cancelled')) AS oral_total,
-       COUNT(*) FILTER (WHERE status = 'done')      AS oral_done,
-       COUNT(*) FILTER (WHERE status = 'cancelled') AS oral_cancelled,
-       COUNT(*) FILTER (WHERE status = 'changed')   AS oral_changed,
-       COUNT(*) FILTER (WHERE status = 'pending')   AS oral_pending
-     FROM scheduled_treatments
-     WHERE scheduled_date = $1 AND treatment_category = '内服'`,
-    [date]
-  );
-  const oa = oralRows[0] || {};
+  // 内服件数（treatment_category 列なし → 常に0）
+  const oa: Record<string, number> = {};
 
   const { rows: intRows } = await pool.query(
     `SELECT
@@ -96,8 +84,7 @@ router.get('/', async (_req: AuthRequest, res: Response) => {
          COUNT(*) FILTER (WHERE status = 'done') AS inj_done,
          COUNT(*) AS inj_total
        FROM scheduled_treatments
-       WHERE scheduled_date = $1
-         AND COALESCE(treatment_category, '注射') = '注射'`,
+       WHERE scheduled_date = $1`,
       [dateStr]
     );
     const { rows: intCntRows } = await pool.query(

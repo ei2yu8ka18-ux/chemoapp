@@ -9,10 +9,10 @@ import {
 import { Add, Edit, PowerSettingsNew } from '@mui/icons-material';
 import api from '../services/api';
 
-// 0=日 1=月 2=火 3=水 4=木 5=金 6=土
-const WEEK_DAYS = ['日', '月', '火', '水', '木', '金', '土'];
+// 0=日 1=月 2=火 3=水 4=木 5=金 
+const WEEK_DAYS = ['日', '月', '火', '水', '木', '金'];
 // 業務日は月〜土（0=日は省略）
-const WORK_DAYS = [1, 2, 3, 4, 5, 6];
+const WORK_DAYS = [1, 2, 3, 4, 5];
 
 interface UserRow {
   id: number;

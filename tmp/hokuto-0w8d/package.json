@@ -1,0 +1,313 @@
+{
+  "version": "1.0",
+  "generatedAt": "2026-03-11T15:15:50.069Z",
+  "records": [
+    {
+      "regimenName": "Zolbetuximab + CAPOX",
+      "department": "消化器内科",
+      "sourceTitle": "Zolbetuximab + CAPOX | ゾルベツキシマブ + カペシタビン + オキサリプラチン | レジメン | 適正使用ガイド | HOKUTO",
+      "sourceFile": "C:\\Dev\\chemoapp\\tmp\\hokuto-0w8d\\page.html",
+      "markdownContent": "# Zolbetuximab + CAPOX",
+      "decisionSupport": {
+        "criteria": [],
+        "doseLevels": [
+          {
+            "drug_name": "Zolbetuximab",
+            "level_index": 0,
+            "level_label": "通常量",
+            "dose_text": "800mg/m² 点滴 / コース 1 / 投与日 Day1",
+            "dose_unit": null,
+            "per_basis": null,
+            "is_discontinue": false,
+            "section_type": "protocol",
+            "source_section": "regimen.medicines"
+          },
+          {
+            "drug_name": "Zolbetuximab",
+            "level_index": 0,
+            "level_label": "通常量",
+            "dose_text": "600mg/m² 点滴 / コース 2~ / 投与日 Day1",
+            "dose_unit": null,
+            "per_basis": null,
+            "is_discontinue": false,
+            "section_type": "protocol",
+            "source_section": "regimen.medicines"
+          },
+          {
+            "drug_name": "Capecitabine",
+            "level_index": 0,
+            "level_label": "通常量",
+            "dose_text": "2,000mg/m²/日  経口分2 朝夕食後 / コース 1~ / 投与日 Day1~14",
+            "dose_unit": null,
+            "per_basis": null,
+            "is_discontinue": false,
+            "section_type": "protocol",
+            "source_section": "regimen.medicines"
+          },
+          {
+            "drug_name": "Oxaliplatin",
+            "level_index": 0,
+            "level_label": "通常量",
+            "dose_text": "130mg/m² 点滴 / コース 1~ / 投与日 Day1",
+            "dose_unit": null,
+            "per_basis": null,
+            "is_discontinue": false,
+            "section_type": "protocol",
+            "source_section": "regimen.medicines"
+          }
+        ],
+        "toxicityActions": []
+      },
+      "meta": {
+        "extractor": "html",
+        "sourcePath": "C:\\Dev\\chemoapp\\tmp\\hokuto-0w8d\\page.html",
+        "tableCount": 0,
+        "regimenJsonTableCount": 3,
+        "nextDataStringCount": 1145,
+        "imageSourceCount": 6,
+        "imageSources": [
+          {
+            "url": "https://firebasestorage.googleapis.com/v0/b/hokutoapp-jp.appspot.com/o/regimens%2F0w8dfkJiO3lKjhdul1ID%2F22a0e9f5-21c2-4ddf-b23e-e671a1a30e49.jpg?alt=media&token=09487383-11ae-4a56-8dbd-fdce07bfa367",
+            "section": "scheduleImages"
+          },
+          {
+            "url": "https://firebasestorage.googleapis.com/v0/b/hokutoapp-jp.appspot.com/o/regimens%2F0w8dfkJiO3lKjhdul1ID%2Fabstracts%2F5cb4034a-b2f1-4223-ab01-d7c21c6ae09d.jpg?alt=media&token=fd0284a8-6800-4eaa-a7c3-3d6d4cd603b5",
+            "section": "*チェプラファーム株式会社の外部サイトへ遷移します"
+          },
+          {
+            "url": "https://firebasestorage.googleapis.com/v0/b/hokutoapp-jp.appspot.com/o/regimens%2F0w8dfkJiO3lKjhdul1ID%2Fabstracts%2F5e55c11b-cde3-4189-b756-aa211058526e.jpg?alt=media&token=8efddb90-629d-49ab-bb63-4af72236f8db",
+            "section": "Nat Med. 2023 Aug;29(8):2133-2141⁶⁾より作図"
+          },
+          {
+            "url": "https://firebasestorage.googleapis.com/v0/b/hokutoapp-jp.appspot.com/o/regimens%2F0w8dfkJiO3lKjhdul1ID%2Fabstracts%2F0aaf9d68-9c20-4f5a-9ce0-a1bad557276b.jpg?alt=media&token=d5c41fd2-0b22-40c3-a91d-ab9179e1ddb9",
+            "section": "ビロイ®電子添文 (2024年6月改訂 第2版)¹⁾より作図"
+          },
+          {
+            "url": "https://firebasestorage.googleapis.com/v0/b/hokutoapp-jp.appspot.com/o/regimens%2F0w8dfkJiO3lKjhdul1ID%2Fabstracts%2F18355b46-04c4-4915-aab1-9d5f7f4ee0c0.jpg?alt=media&token=8dfb0778-dcf7-4ab5-9786-fffe7f7d58c3",
+            "section": "監修 : 神奈川県立がんセンター消化器内科部長 町田望先生"
+          },
+          {
+            "url": "https://firebasestorage.googleapis.com/v0/b/hokutoapp-jp.appspot.com/o/regimens%2F0w8dfkJiO3lKjhdul1ID%2Fabstracts%2F352adc91-ef47-4c57-a4d5-dc1cd70aac72.jpg?alt=media&token=4ead93bb-0592-4f50-a7cf-cfaff1ef8636",
+            "section": "Nat Med. 2023 Aug;29(8):2133-2141⁶⁾より引用"
+          }
+        ],
+        "counts": {
+          "criteria": 0,
+          "doseLevels": 4,
+          "toxicityActions": 0
+        }
+      }
+    },
+    {
+      "regimenName": "Zolbetuximab + CAPOX",
+      "department": "消化器内科",
+      "sourceTitle": "Zolbetuximab + CAPOX OCR抽出",
+      "sourceFile": "C:\\Dev\\chemoapp\\tmp\\hokuto-0w8d\\images\\regimens%2F0w8dfkJiO3lKjhdul1ID%2F22a0e9f5-21c2-4ddf-b23e-e671a1a30e49.jpg, C:\\Dev\\chemoapp\\tmp\\hokuto-0w8d\\images\\regimens%2F0w8dfkJiO3lKjhdul1ID%2Fabstracts%2F0aaf9d68-9c20-4f5a-9ce0-a1bad557276b.jpg, C:\\Dev\\chemoapp\\tmp\\hokuto-0w8d\\images\\regimens%2F0w8dfkJiO3lKjhdul1ID%2Fabstracts%2F18355b46-04c4-4915-aab1-9d5f7f4ee0c0.jpg, C:\\Dev\\chemoapp\\tmp\\hokuto-0w8d\\images\\regimens%2F0w8dfkJiO3lKjhdul1ID%2Fabstracts%2F352adc91-ef47-4c57-a4d5-dc1cd70aac72.jpg, C:\\Dev\\chemoapp\\tmp\\hokuto-0w8d\\images\\regimens%2F0w8dfkJiO3lKjhdul1ID%2Fabstracts%2F5cb4034a-b2f1-4223-ab01-d7c21c6ae09d.jpg, C:\\Dev\\chemoapp\\tmp\\hokuto-0w8d\\images\\regimens%2F0w8dfkJiO3lKjhdul1ID%2Fabstracts%2F5e55c11b-cde3-4189-b756-aa211058526e.jpg",
+      "markdownContent": "# Zolbetuximab + CAPOX\n\nOCR source images: 6",
+      "decisionSupport": {
+        "criteria": [
+          {
+            "metric_key": "anc",
+            "comparator": "=",
+            "threshold_value": 21.5,
+            "threshold_unit": "x10^3/uL",
+            "criterion_text": "好中球数 =21,500/uL",
+            "is_required": true,
+            "section_type": "start_criteria",
+            "source_section": "regimens%2F0w8dfkJiO3lKjhdul1ID%2Fabstracts%2F18355b46-04c4-4915-aab1-9d5f7f4ee0c0.jpg"
+          },
+          {
+            "metric_key": "tbil",
+            "comparator": "<",
+            "threshold_value": 3,
+            "threshold_unit": "mg/dL",
+            "criterion_text": "T-bil ミ上正常値上限1.5倍(肝転移時<3倍)",
+            "is_required": true,
+            "section_type": "start_criteria",
+            "source_section": "regimens%2F0w8dfkJiO3lKjhdul1ID%2Fabstracts%2F18355b46-04c4-4915-aab1-9d5f7f4ee0c0.jpg"
+          }
+        ],
+        "doseLevels": [
+          {
+            "drug_name": "80",
+            "level_index": 0,
+            "level_label": "通常量",
+            "dose_text": "0mg",
+            "dose_unit": null,
+            "per_basis": null,
+            "is_discontinue": false,
+            "section_type": "protocol",
+            "source_section": "regimens%2F0w8dfkJiO3lKjhdul1ID%2F22a0e9f5-21c2-4ddf-b23e-e671a1a30e49.jpg"
+          },
+          {
+            "drug_name": "-60",
+            "level_index": 0,
+            "level_label": "通常量",
+            "dose_text": "0mg",
+            "dose_unit": null,
+            "per_basis": null,
+            "is_discontinue": false,
+            "section_type": "protocol",
+            "source_section": "regimens%2F0w8dfkJiO3lKjhdul1ID%2F22a0e9f5-21c2-4ddf-b23e-e671a1a30e49.jpg"
+          },
+          {
+            "drug_name": "00",
+            "level_index": 0,
+            "level_label": "通常量",
+            "dose_text": "0mg",
+            "dose_unit": null,
+            "per_basis": null,
+            "is_discontinue": false,
+            "section_type": "protocol",
+            "source_section": "regimens%2F0w8dfkJiO3lKjhdul1ID%2F22a0e9f5-21c2-4ddf-b23e-e671a1a30e49.jpg"
+          },
+          {
+            "drug_name": "13",
+            "level_index": 0,
+            "level_label": "通常量",
+            "dose_text": "0mg",
+            "dose_unit": null,
+            "per_basis": null,
+            "is_discontinue": false,
+            "section_type": "protocol",
+            "source_section": "regimens%2F0w8dfkJiO3lKjhdul1ID%2F22a0e9f5-21c2-4ddf-b23e-e671a1a30e49.jpg"
+          },
+          {
+            "drug_name": "20",
+            "level_index": 0,
+            "level_label": "通常量",
+            "dose_text": "0mg",
+            "dose_unit": null,
+            "per_basis": null,
+            "is_discontinue": false,
+            "section_type": "protocol",
+            "source_section": "regimens%2F0w8dfkJiO3lKjhdul1ID%2Fabstracts%2F0aaf9d68-9c20-4f5a-9ce0-a1bad557276b.jpg"
+          },
+          {
+            "drug_name": "50",
+            "level_index": 0,
+            "level_label": "通常量",
+            "dose_text": "0mg",
+            "dose_unit": null,
+            "per_basis": null,
+            "is_discontinue": false,
+            "section_type": "protocol",
+            "source_section": "regimens%2F0w8dfkJiO3lKjhdul1ID%2Fabstracts%2F0aaf9d68-9c20-4f5a-9ce0-a1bad557276b.jpg"
+          },
+          {
+            "drug_name": "80",
+            "level_index": 0,
+            "level_label": "通常量",
+            "dose_text": "0mg",
+            "dose_unit": null,
+            "per_basis": null,
+            "is_discontinue": false,
+            "section_type": "protocol",
+            "source_section": "regimens%2F0w8dfkJiO3lKjhdul1ID%2Fabstracts%2F0aaf9d68-9c20-4f5a-9ce0-a1bad557276b.jpg"
+          },
+          {
+            "drug_name": "80",
+            "level_index": 0,
+            "level_label": "通常量",
+            "dose_text": "0mg",
+            "dose_unit": null,
+            "per_basis": null,
+            "is_discontinue": false,
+            "section_type": "protocol",
+            "source_section": "regimens%2F0w8dfkJiO3lKjhdul1ID%2Fabstracts%2F5cb4034a-b2f1-4223-ab01-d7c21c6ae09d.jpg"
+          },
+          {
+            "drug_name": "-60",
+            "level_index": 0,
+            "level_label": "通常量",
+            "dose_text": "0mg",
+            "dose_unit": null,
+            "per_basis": null,
+            "is_discontinue": false,
+            "section_type": "protocol",
+            "source_section": "regimens%2F0w8dfkJiO3lKjhdul1ID%2Fabstracts%2F5cb4034a-b2f1-4223-ab01-d7c21c6ae09d.jpg"
+          },
+          {
+            "drug_name": "00",
+            "level_index": 0,
+            "level_label": "通常量",
+            "dose_text": "0mg",
+            "dose_unit": null,
+            "per_basis": null,
+            "is_discontinue": false,
+            "section_type": "protocol",
+            "source_section": "regimens%2F0w8dfkJiO3lKjhdul1ID%2Fabstracts%2F5cb4034a-b2f1-4223-ab01-d7c21c6ae09d.jpg"
+          },
+          {
+            "drug_name": "13",
+            "level_index": 0,
+            "level_label": "通常量",
+            "dose_text": "0mg",
+            "dose_unit": null,
+            "per_basis": null,
+            "is_discontinue": false,
+            "section_type": "protocol",
+            "source_section": "regimens%2F0w8dfkJiO3lKjhdul1ID%2Fabstracts%2F5cb4034a-b2f1-4223-ab01-d7c21c6ae09d.jpg"
+          },
+          {
+            "drug_name": "80",
+            "level_index": 0,
+            "level_label": "通常量",
+            "dose_text": "0mg",
+            "dose_unit": null,
+            "per_basis": null,
+            "is_discontinue": false,
+            "section_type": "protocol",
+            "source_section": "regimens%2F0w8dfkJiO3lKjhdul1ID%2Fabstracts%2F5e55c11b-cde3-4189-b756-aa211058526e.jpg"
+          },
+          {
+            "drug_name": "60",
+            "level_index": 0,
+            "level_label": "通常量",
+            "dose_text": "0mg",
+            "dose_unit": null,
+            "per_basis": null,
+            "is_discontinue": false,
+            "section_type": "protocol",
+            "source_section": "regimens%2F0w8dfkJiO3lKjhdul1ID%2Fabstracts%2F5e55c11b-cde3-4189-b756-aa211058526e.jpg"
+          },
+          {
+            "drug_name": "40",
+            "level_index": 0,
+            "level_label": "通常量",
+            "dose_text": "0mg",
+            "dose_unit": null,
+            "per_basis": null,
+            "is_discontinue": false,
+            "section_type": "protocol",
+            "source_section": "regimens%2F0w8dfkJiO3lKjhdul1ID%2Fabstracts%2F5e55c11b-cde3-4189-b756-aa211058526e.jpg"
+          }
+        ],
+        "toxicityActions": []
+      },
+      "meta": {
+        "extractor": "ocr",
+        "sourceImages": [
+          "C:\\Dev\\chemoapp\\tmp\\hokuto-0w8d\\images\\regimens%2F0w8dfkJiO3lKjhdul1ID%2F22a0e9f5-21c2-4ddf-b23e-e671a1a30e49.jpg",
+          "C:\\Dev\\chemoapp\\tmp\\hokuto-0w8d\\images\\regimens%2F0w8dfkJiO3lKjhdul1ID%2Fabstracts%2F0aaf9d68-9c20-4f5a-9ce0-a1bad557276b.jpg",
+          "C:\\Dev\\chemoapp\\tmp\\hokuto-0w8d\\images\\regimens%2F0w8dfkJiO3lKjhdul1ID%2Fabstracts%2F18355b46-04c4-4915-aab1-9d5f7f4ee0c0.jpg",
+          "C:\\Dev\\chemoapp\\tmp\\hokuto-0w8d\\images\\regimens%2F0w8dfkJiO3lKjhdul1ID%2Fabstracts%2F352adc91-ef47-4c57-a4d5-dc1cd70aac72.jpg",
+          "C:\\Dev\\chemoapp\\tmp\\hokuto-0w8d\\images\\regimens%2F0w8dfkJiO3lKjhdul1ID%2Fabstracts%2F5cb4034a-b2f1-4223-ab01-d7c21c6ae09d.jpg",
+          "C:\\Dev\\chemoapp\\tmp\\hokuto-0w8d\\images\\regimens%2F0w8dfkJiO3lKjhdul1ID%2Fabstracts%2F5e55c11b-cde3-4189-b756-aa211058526e.jpg"
+        ],
+        "preprocessing": {
+          "enabled": true,
+          "threshold": 170,
+          "contrast": 0.45,
+          "scale": 1.6,
+          "psm": 6
+        },
+        "counts": {
+          "criteria": 2,
+          "doseLevels": 14,
+          "toxicityActions": 0
+        }
+      }
+    }
+  ]
+}

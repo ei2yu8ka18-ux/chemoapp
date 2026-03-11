@@ -1,595 +1,999 @@
-import { useState, useEffect, useCallback } from 'react';
+﻿import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  Box, Typography, Paper, Button, TextField, Chip, Alert,
-  Table, TableHead, TableBody, TableRow, TableCell, TableContainer,
-  Dialog, DialogTitle, DialogContent, DialogActions, Stack,
-  IconButton, Tooltip, Collapse, Switch, FormControlLabel,
-  Divider, Select, MenuItem, FormControl, InputLabel, CircularProgress,
+  Box,
+  Typography,
+  Paper,
+  Stack,
+  Button,
+  TextField,
+  Alert,
+  CircularProgress,
+  Table,
+  TableHead,
+  TableBody,
+  TableRow,
+  TableCell,
+  TableContainer,
+  Chip,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  IconButton,
+  Tooltip,
 } from '@mui/material';
 import {
-  Add, Edit, Delete, ExpandMore, ExpandLess,
-  MedicalServices, Save, Close,
+  UploadFile,
+  Link as LinkIcon,
+  Delete,
+  Edit,
+  Visibility,
+  Refresh,
+  Analytics,
+  LibraryBooks,
+  Settings,
 } from '@mui/icons-material';
 import api from '../services/api';
 
 const API = '/regimen-check';
 
-/* ─── 型定義 ────────────────────────────────────────────── */
-interface RegimenMaster {
+interface GuidelineSourceSummary {
   id: number;
+  department?: string | null;
   regimen_name: string;
-  category: string | null;
-  cycle_days: number;
-  description: string | null;
-  is_active: boolean;
-  created_at: string;
-  updated_at: string;
+  regimen_key: string;
+  source_file: string | null;
+  source_title?: string | null;
+  imported_at?: string | null;
 }
 
-interface RegimenDrug {
+interface GuidelineSourceDetail extends GuidelineSourceSummary {
+  markdown_content: string;
+}
+
+interface EditState {
   id: number;
-  regimen_id: number;
-  sort_order: number;
+  department: string;
+  regimenName: string;
+  sourceTitle: string;
+  markdownContent: string;
+}
+
+interface DecisionCriteriaItem {
+  id?: number;
+  metric_key: string;
+  comparator: string;
+  threshold_value: number;
+  threshold_unit: string | null;
+  criterion_text: string;
+  section_type?: string | null;
+  source_section?: string | null;
+}
+
+interface DecisionDoseLevelItem {
+  id?: number;
   drug_name: string;
-  drug_type: string;
-  base_dose: number | null;
-  dose_unit: string | null;
-  dose_per: string;
-  solvent_name: string | null;
-  solvent_volume: number | null;
-  route: string | null;
-  drip_time: string | null;
-  notes: string | null;
+  level_index: number;
+  level_label: string;
+  dose_text: string;
+  dose_unit?: string | null;
+  per_basis?: string | null;
+  is_discontinue?: boolean;
+  section_type?: string | null;
+  source_section?: string | null;
 }
 
-interface ToxicityRule {
-  id: number;
-  regimen_id: number;
-  toxicity_item: string;
-  grade1_action: string;
-  grade2_action: string;
-  grade3_action: string;
-  grade4_action: string;
-  notes: string | null;
+interface DecisionToxicityActionItem {
+  id?: number;
+  toxicity_name: string;
+  condition_text: string;
+  action_text: string;
+  level_delta?: number;
+  hold_flag?: boolean;
+  discontinue_flag?: boolean;
+  priority?: number;
+  section_type?: string | null;
+  source_section?: string | null;
 }
 
-/* ─── 薬剤タイプ定義 ─────────────────────────────────── */
-const DRUG_TYPE_LABELS: Record<string, { label: string; color: string; bg: string }> = {
-  antineoplastic: { label: '抗腫瘍薬', color: '#b71c1c', bg: '#ffebee' },
-  support:        { label: '支持療法', color: '#1565c0', bg: '#e3f2fd' },
-  solvent:        { label: '溶媒',     color: '#555',    bg: '#f5f5f5' },
-  hormone:        { label: 'ホルモン', color: '#6a1b9a', bg: '#f3e5f5' },
-  immunotherapy:  { label: '免疫療法', color: '#00695c', bg: '#e0f2f1' },
+interface DecisionSupportEditorState {
+  sourceId: number;
+  regimenName: string;
+  criteria: DecisionCriteriaItem[];
+  doseLevels: DecisionDoseLevelItem[];
+  toxicityActions: DecisionToxicityActionItem[];
+}
+
+const fmtDateTime = (value: string | null | undefined) => {
+  if (!value) return '-';
+  return value.slice(0, 16).replace('T', ' ');
 };
 
-const DOSE_PER_LABELS: Record<string, string> = {
-  BSA:         'BSA (mg/m²)',
-  body_weight: '体重 (mg/kg)',
-  fixed:       '固定量',
+const basename = (value: string | null | undefined) => {
+  if (!value) return '';
+  const parts = value.split(/[\\/]/);
+  return parts[parts.length - 1] || value;
 };
 
-/* ─── 薬剤フォームのデフォルト値 ──────────────────────── */
-const emptyDrug = (): Partial<RegimenDrug> => ({
-  sort_order: 1, drug_name: '', drug_type: 'antineoplastic',
-  base_dose: undefined, dose_unit: '', dose_per: 'BSA',
-  solvent_name: '', solvent_volume: undefined, route: '', drip_time: '', notes: '',
-});
+const isUrl = (value: string | null | undefined) => /^https?:\/\//i.test(value ?? '');
 
-const emptyToxicity = (): Partial<ToxicityRule> => ({
-  toxicity_item: '',
-  grade1_action: '継続',
-  grade2_action: '減量検討',
-  grade3_action: '休薬または減量',
-  grade4_action: '中止推奨',
-  notes: '',
-});
+const looksLikeHtml = (value: string) => /<\s*(html|body|table|div|section|article|h1|p)\b/i.test(value);
 
-/* ─── コンポーネント ────────────────────────────────── */
 export default function RegimenMasterPage() {
-  const [masters, setMasters] = useState<RegimenMaster[]>([]);
-  const [drugs, setDrugs] = useState<RegimenDrug[]>([]);
-  const [toxicity, setToxicity] = useState<ToxicityRule[]>([]);
+  const [sources, setSources] = useState<GuidelineSourceSummary[]>([]);
   const [loading, setLoading] = useState(false);
+  const [importing, setImporting] = useState(false);
   const [error, setError] = useState('');
-  const [expandedId, setExpandedId] = useState<number | null>(null);
+  const [info, setInfo] = useState('');
 
-  // マスタ編集ダイアログ
-  const [masterDialog, setMasterDialog] = useState<{ open: boolean; data: Partial<RegimenMaster> }>({ open: false, data: {} });
-  const [masterSaving, setMasterSaving] = useState(false);
+  const [regimenNameInput, setRegimenNameInput] = useState('');
+  const [departmentInput, setDepartmentInput] = useState('');
+  const [importUrl, setImportUrl] = useState('');
 
-  // 薬剤編集ダイアログ
-  const [drugDialog, setDrugDialog] = useState<{ open: boolean; regimenId: number; data: Partial<RegimenDrug>; editId?: number }>({
-    open: false, regimenId: 0, data: emptyDrug(),
-  });
-  const [drugSaving, setDrugSaving] = useState(false);
+  const [preview, setPreview] = useState<GuidelineSourceDetail | null>(null);
+  const [edit, setEdit] = useState<EditState | null>(null);
+  const [savingEdit, setSavingEdit] = useState(false);
+  const [convertingSourceId, setConvertingSourceId] = useState<number | null>(null);
+  const [decisionEdit, setDecisionEdit] = useState<DecisionSupportEditorState | null>(null);
+  const [savingDecisionEdit, setSavingDecisionEdit] = useState(false);
 
-  // 毒性ルール編集ダイアログ
-  const [toxDialog, setToxDialog] = useState<{ open: boolean; regimenId: number; data: Partial<ToxicityRule>; editId?: number }>({
-    open: false, regimenId: 0, data: emptyToxicity(),
-  });
-  const [toxSaving, setToxSaving] = useState(false);
-
-  // 削除確認
-  const [deleteConfirm, setDeleteConfirm] = useState<{ type: 'master' | 'drug' | 'toxicity'; id: number } | null>(null);
-
-  const loadData = useCallback(async () => {
-    setLoading(true); setError('');
+  const loadSources = useCallback(async () => {
+    setLoading(true);
+    setError('');
     try {
-      const r = await api.get<{ masters: RegimenMaster[]; drugs: RegimenDrug[]; toxicity: ToxicityRule[] }>(`${API}/regimen-master`);
-      setMasters(r.data.masters);
-      setDrugs(r.data.drugs);
-      setToxicity(r.data.toxicity);
-    } catch {
-      setError('データ取得に失敗しました');
-    } finally { setLoading(false); }
+      const response = await api.get<GuidelineSourceSummary[]>(`${API}/guideline-sources`);
+      setSources(response.data ?? []);
+    } catch (e: any) {
+      setError(e?.response?.data?.error || '取り込み済みデータの取得に失敗しました');
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
-  useEffect(() => { loadData(); }, [loadData]);
+  useEffect(() => {
+    void loadSources();
+  }, [loadSources]);
 
-  /* ── マスタ保存 ── */
-  const handleSaveMaster = async () => {
-    const d = masterDialog.data;
-    if (!d.regimen_name?.trim()) return;
-    setMasterSaving(true);
-    try {
-      if (d.id) {
-        await api.patch(`${API}/regimen-master/${d.id}`, d);
+  const grouped = useMemo(() => {
+    const map = new Map<string, { regimenName: string; items: GuidelineSourceSummary[] }>();
+    for (const row of sources) {
+      const key = row.regimen_key || row.regimen_name;
+      const existing = map.get(key);
+      if (existing) {
+        existing.items.push(row);
+        if (row.regimen_name.length > existing.regimenName.length) {
+          existing.regimenName = row.regimen_name;
+        }
       } else {
-        await api.post(`${API}/regimen-master`, d);
+        map.set(key, { regimenName: row.regimen_name, items: [row] });
       }
-      setMasterDialog({ open: false, data: {} });
-      await loadData();
+    }
+    return Array.from(map.entries())
+      .map(([key, value]) => ({
+        regimenKey: key,
+        regimenName: value.regimenName,
+        items: value.items.sort((a, b) => (b.imported_at || '').localeCompare(a.imported_at || '')),
+      }))
+      .sort((a, b) => a.regimenName.localeCompare(b.regimenName, 'ja'));
+  }, [sources]);
+
+  const handleImportFile = async (file: File) => {
+    setInfo('');
+    setError('');
+    setImporting(true);
+    try {
+      const content = await file.text();
+      const fallbackName = file.name.replace(/\.[^.]+$/, '');
+      const regimenName = regimenNameInput.trim() || fallbackName;
+      await api.post(`${API}/guideline-sources/import-text`, {
+        department: departmentInput.trim(),
+        regimenName,
+        sourceName: file.name,
+        content,
+      });
+      setInfo(`取り込み完了: ${file.name}`);
+      await loadSources();
     } catch (e: any) {
-      setError(e?.response?.data?.error || 'マスタ保存に失敗しました');
-    } finally { setMasterSaving(false); }
+      setError(e?.response?.data?.error || 'ファイル取り込みに失敗しました');
+    } finally {
+      setImporting(false);
+    }
   };
 
-  /* ── 薬剤保存 ── */
-  const handleSaveDrug = async () => {
-    const d = drugDialog.data;
-    if (!d.drug_name?.trim()) return;
-    setDrugSaving(true);
+  const handleImportUrl = async () => {
+    const url = importUrl.trim();
+    if (!url) return;
+    setInfo('');
+    setError('');
+    setImporting(true);
     try {
-      if (drugDialog.editId) {
-        await api.patch(`${API}/regimen-master/drugs/${drugDialog.editId}`, d);
+      const map = regimenNameInput.trim() ? { [url]: regimenNameInput.trim() } : {};
+      await api.post(`${API}/guideline-rules/import`, {
+        filePaths: [url],
+        regimenNameMap: map,
+      });
+      setInfo('URL取り込みが完了しました');
+      await loadSources();
+    } catch (e: any) {
+      setError(e?.response?.data?.error || 'URL取り込みに失敗しました');
+    } finally {
+      setImporting(false);
+    }
+  };
+
+  const handleImportDecisionPackageFile = async (file: File) => {
+    setInfo('');
+    setError('');
+    setImporting(true);
+    try {
+      const text = await file.text();
+      const payload = JSON.parse(text);
+      const response = await api.post(`${API}/decision-support/import-package`, payload);
+      const data = response.data || {};
+      setInfo(
+        `構造化JSON取り込み完了: ソース ${data.importedSources ?? 0}件 / 適格基準 ${data.importedCriteria ?? 0}件 / 用量レベル ${data.importedDoseLevels ?? 0}件 / 有害事象 ${data.importedToxicityActions ?? 0}件`
+      );
+      await loadSources();
+    } catch (e: any) {
+      if (e instanceof SyntaxError) {
+        setError('JSONの形式が不正です');
       } else {
-        await api.post(`${API}/regimen-master/${drugDialog.regimenId}/drugs`, d);
+        setError(e?.response?.data?.error || '構造化JSON取り込みに失敗しました');
       }
-      setDrugDialog(prev => ({ ...prev, open: false }));
-      await loadData();
-    } catch {
-      setError('薬剤保存に失敗しました');
-    } finally { setDrugSaving(false); }
+    } finally {
+      setImporting(false);
+    }
   };
 
-  /* ── 毒性ルール保存 ── */
-  const handleSaveToxicity = async () => {
-    const d = toxDialog.data;
-    if (!d.toxicity_item?.trim()) return;
-    setToxSaving(true);
+  const handleClearAll = async () => {
+    const ok = window.confirm('取り込み済みガイドラインをすべて削除します。よろしいですか？');
+    if (!ok) return;
+    setInfo('');
+    setError('');
+    setImporting(true);
     try {
-      if (toxDialog.editId) {
-        await api.patch(`${API}/regimen-master/toxicity/${toxDialog.editId}`, d);
-      } else {
-        await api.post(`${API}/regimen-master/${toxDialog.regimenId}/toxicity`, d);
-      }
-      setToxDialog(prev => ({ ...prev, open: false }));
-      await loadData();
-    } catch {
-      setError('毒性ルール保存に失敗しました');
-    } finally { setToxSaving(false); }
+      await api.post(`${API}/guideline-sources/clear`);
+      setInfo('ガイドラインマスタを初期化しました');
+      await loadSources();
+    } catch (e: any) {
+      setError(e?.response?.data?.error || '初期化に失敗しました');
+    } finally {
+      setImporting(false);
+    }
   };
 
-  /* ── 削除 ── */
-  const handleDelete = async () => {
-    if (!deleteConfirm) return;
+  const openPreview = async (id: number) => {
+    setError('');
     try {
-      if (deleteConfirm.type === 'master') await api.delete(`${API}/regimen-master/${deleteConfirm.id}`);
-      else if (deleteConfirm.type === 'drug') await api.delete(`${API}/regimen-master/drugs/${deleteConfirm.id}`);
-      else await api.delete(`${API}/regimen-master/toxicity/${deleteConfirm.id}`);
-      setDeleteConfirm(null);
-      await loadData();
-    } catch { setError('削除に失敗しました'); }
+      const response = await api.get<GuidelineSourceDetail>(`${API}/guideline-sources/${id}`);
+      setPreview(response.data);
+    } catch (e: any) {
+      setError(e?.response?.data?.error || 'プレビュー読込に失敗しました');
+    }
   };
 
-  /* ── カテゴリ一覧（既存から抽出） ── */
-  const categories = [...new Set(masters.map(m => m.category).filter(Boolean) as string[])].sort();
+  const openEdit = async (id: number) => {
+    setError('');
+    try {
+      const response = await api.get<GuidelineSourceDetail>(`${API}/guideline-sources/${id}`);
+      const row = response.data;
+      setEdit({
+        id: row.id,
+        department: row.department || '',
+        regimenName: row.regimen_name,
+        sourceTitle: row.source_title || '',
+        markdownContent: row.markdown_content || '',
+      });
+    } catch (e: any) {
+      setError(e?.response?.data?.error || '編集データの読込に失敗しました');
+    }
+  };
 
-  /* ── カテゴリ別グループ ── */
-  const categorized: { label: string; items: RegimenMaster[] }[] = [
-    ...categories.map(cat => ({ label: cat, items: masters.filter(m => m.category === cat) })),
-    ...(masters.some(m => !m.category) ? [{ label: '未分類', items: masters.filter(m => !m.category) }] : []),
-  ];
+  const handleSaveEdit = async () => {
+    if (!edit) return;
+    if (!edit.regimenName.trim()) {
+      setError('レジメン名は必須です');
+      return;
+    }
+    setSavingEdit(true);
+    setError('');
+    setInfo('');
+    try {
+      await api.patch(`${API}/guideline-sources/${edit.id}`, {
+        department: edit.department.trim(),
+        regimenName: edit.regimenName.trim(),
+        sourceTitle: edit.sourceTitle.trim(),
+        markdownContent: edit.markdownContent,
+      });
+      setEdit(null);
+      setInfo('更新しました');
+      await loadSources();
+    } catch (e: any) {
+      setError(e?.response?.data?.error || '更新に失敗しました');
+    } finally {
+      setSavingEdit(false);
+    }
+  };
 
-  const gradeColor = (g: 1 | 2 | 3 | 4) => {
-    if (g === 1) return { color: '#2e7d32', bg: '#f1f8e9' };
-    if (g === 2) return { color: '#e65100', bg: '#fff8e1' };
-    if (g === 3) return { color: '#c62828', bg: '#ffebee' };
-    return { color: '#6a1b9a', bg: '#f3e5f5' };
+  const handleDeleteSource = async (id: number) => {
+    const ok = window.confirm('このソースを削除しますか？');
+    if (!ok) return;
+    setInfo('');
+    setError('');
+    try {
+      await api.delete(`${API}/guideline-sources/${id}`);
+      setInfo('削除しました');
+      await loadSources();
+    } catch (e: any) {
+      setError(e?.response?.data?.error || '削除に失敗しました');
+    }
+  };
+
+  const handleBuildDecisionSupport = async (id: number) => {
+    setInfo('');
+    setError('');
+    setConvertingSourceId(id);
+    try {
+      const response = await api.post(`${API}/decision-support/import-from-source/${id}`);
+      const counts = response.data?.counts || {};
+      setInfo(
+        `DB化完了: 適格基準 ${counts.criteria ?? 0}件 / 用量レベル ${counts.doseLevels ?? 0}件 / 有害事象 ${counts.toxicityActions ?? 0}件`
+      );
+      await loadSources();
+    } catch (e: any) {
+      setError(e?.response?.data?.error || '構造化ルールのDB化に失敗しました');
+    } finally {
+      setConvertingSourceId(null);
+    }
+  };
+
+  const openDecisionEdit = async (item: GuidelineSourceSummary) => {
+    setError('');
+    try {
+      const response = await api.get<{
+        sourceId: number | null;
+        criteria: DecisionCriteriaItem[];
+        doseLevels: DecisionDoseLevelItem[];
+        toxicityActions: DecisionToxicityActionItem[];
+      }>(`${API}/decision-support/${encodeURIComponent(item.regimen_key || item.regimen_name)}`, {
+        params: { sourceId: item.id },
+      });
+
+      setDecisionEdit({
+        sourceId: item.id,
+        regimenName: item.regimen_name,
+        criteria: (response.data.criteria || []).map((row) => ({
+          ...row,
+          comparator: row.comparator || '>=',
+          threshold_value: Number(row.threshold_value ?? 0),
+        })),
+        doseLevels: (response.data.doseLevels || []).map((row) => ({
+          ...row,
+          level_index: Number(row.level_index ?? 0),
+          is_discontinue: Boolean(row.is_discontinue),
+        })),
+        toxicityActions: (response.data.toxicityActions || []).map((row) => ({
+          ...row,
+          level_delta: Number(row.level_delta ?? 0),
+          hold_flag: Boolean(row.hold_flag),
+          discontinue_flag: Boolean(row.discontinue_flag),
+          priority: Number(row.priority ?? 100),
+        })),
+      });
+    } catch (e: any) {
+      setError(e?.response?.data?.error || '構造化データの取得に失敗しました');
+    }
+  };
+
+  const handleSaveDecisionEdit = async () => {
+    if (!decisionEdit) return;
+    setSavingDecisionEdit(true);
+    setError('');
+    setInfo('');
+    try {
+      await api.put(`${API}/decision-support/source/${decisionEdit.sourceId}`, {
+        criteria: decisionEdit.criteria.map((row) => ({
+          ...row,
+          threshold_value: Number(row.threshold_value ?? 0),
+          comparator: row.comparator || '>=',
+          section_type: row.section_type || 'start_criteria',
+        })),
+        doseLevels: decisionEdit.doseLevels.map((row) => ({
+          ...row,
+          level_index: Number(row.level_index ?? 0),
+          section_type: row.section_type || 'dose_level',
+        })),
+        toxicityActions: decisionEdit.toxicityActions.map((row) => ({
+          ...row,
+          level_delta: Number(row.level_delta ?? 0),
+          priority: Number(row.priority ?? 100),
+          section_type: row.section_type || 'adverse_event',
+        })),
+      });
+      setInfo('DB化データを更新しました');
+      setDecisionEdit(null);
+      await loadSources();
+    } catch (e: any) {
+      setError(e?.response?.data?.error || 'DB化データの更新に失敗しました');
+    } finally {
+      setSavingDecisionEdit(false);
+    }
   };
 
   return (
-    <Box sx={{ p: 2, maxWidth: 1200, mx: 'auto' }}>
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
-        <MedicalServices sx={{ color: '#1565c0', fontSize: 28 }} />
-        <Typography variant="h6" sx={{ fontWeight: 'bold' }}>レジメンマスタ管理</Typography>
+    <Box sx={{ p: 2, maxWidth: 1280, mx: 'auto' }}>
+      <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 2 }}>
+        <LibraryBooks sx={{ color: '#1565c0' }} />
+        <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
+          レジメンマスタ（ガイドライン取り込み管理）
+        </Typography>
         <Box sx={{ flexGrow: 1 }} />
-        <Button variant="contained" startIcon={<Add />}
-          onClick={() => setMasterDialog({ open: true, data: { cycle_days: 21, is_active: true } })}>
-          新規レジメン追加
-        </Button>
-        <IconButton onClick={loadData} size="small"><MedicalServices sx={{ fontSize: 18 }} /></IconButton>
-      </Box>
+        <Tooltip title="再読込">
+          <IconButton onClick={() => void loadSources()}>
+            <Refresh />
+          </IconButton>
+        </Tooltip>
+      </Stack>
 
-      {error && <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError('')}>{error}</Alert>}
-      {loading && <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}><CircularProgress /></Box>}
+      {error && (
+        <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError('')}>
+          {error}
+        </Alert>
+      )}
+      {info && (
+        <Alert severity="success" sx={{ mb: 2 }} onClose={() => setInfo('')}>
+          {info}
+        </Alert>
+      )}
 
-      {!loading && categorized.map(({ label: catLabel, items: catItems }) => (
-        <Box key={catLabel} sx={{ mb: 3 }}>
-          {/* ── カテゴリセクションヘッダー ── */}
-          <Box sx={{
-            display: 'flex', alignItems: 'center', gap: 1, mb: 1,
-            borderBottom: '2px solid', borderColor: catLabel === '未分類' ? '#90a4ae' : '#1565c0',
-            pb: 0.5,
-          }}>
-            <Typography sx={{
-              fontWeight: 'bold', fontSize: '0.95rem',
-              color: catLabel === '未分類' ? '#546e7a' : '#1565c0',
-            }}>
-              🏷️ {catLabel}
-            </Typography>
-            <Chip
-              label={`${catItems.length} レジメン`}
+      <Paper variant="outlined" sx={{ p: 2, mb: 2 }}>
+        <Typography sx={{ fontSize: '0.95rem', fontWeight: 'bold', mb: 1 }}>
+          取り込み
+        </Typography>
+        <Stack spacing={1}>
+          <TextField
+            size="small"
+            label="診療科（任意）"
+            value={departmentInput}
+            onChange={(e) => setDepartmentInput(e.target.value)}
+          />
+          <TextField
+            size="small"
+            label="レジメン名（空欄ならファイル名から推定）"
+            value={regimenNameInput}
+            onChange={(e) => setRegimenNameInput(e.target.value)}
+          />
+          <Stack direction={{ xs: 'column', md: 'row' }} spacing={1}>
+            <Button
+              variant="contained"
+              startIcon={<UploadFile />}
+              component="label"
+              disabled={importing}
+              sx={{ whiteSpace: 'nowrap' }}
+            >
+              ファイル取り込み
+              <input
+                hidden
+                type="file"
+                accept=".md,.txt,.html,.htm"
+                onChange={async (e) => {
+                  const file = e.target.files?.[0];
+                  if (file) await handleImportFile(file);
+                  e.currentTarget.value = '';
+                }}
+              />
+            </Button>
+            <Button
+              variant="outlined"
+              startIcon={<UploadFile />}
+              component="label"
+              disabled={importing}
+              sx={{ whiteSpace: 'nowrap' }}
+            >
+              構造化JSON取り込み
+              <input
+                hidden
+                type="file"
+                accept=".json"
+                onChange={async (e) => {
+                  const file = e.target.files?.[0];
+                  if (file) await handleImportDecisionPackageFile(file);
+                  e.currentTarget.value = '';
+                }}
+              />
+            </Button>
+            <TextField
               size="small"
-              sx={{ fontSize: '0.68rem', height: 18, bgcolor: '#e3f2fd', color: '#1565c0' }}
+              fullWidth
+              label="URL取り込み（ネット接続時のみ）"
+              value={importUrl}
+              onChange={(e) => setImportUrl(e.target.value)}
             />
-          </Box>
+            <Button
+              variant="outlined"
+              startIcon={<LinkIcon />}
+              disabled={importing || !importUrl.trim()}
+              onClick={() => void handleImportUrl()}
+              sx={{ whiteSpace: 'nowrap' }}
+            >
+              URL取り込み
+            </Button>
+            <Button
+              variant="outlined"
+              color="error"
+              disabled={importing}
+              onClick={() => void handleClearAll()}
+              sx={{ whiteSpace: 'nowrap' }}
+            >
+              全削除
+            </Button>
+          </Stack>
+        </Stack>
+      </Paper>
 
-          {catItems.map(m => {
-        const mDrugs = drugs.filter(d => d.regimen_id === m.id).sort((a, b) => a.sort_order - b.sort_order);
-        const mTox = toxicity.filter(t => t.regimen_id === m.id).sort((a, b) => a.toxicity_item.localeCompare(b.toxicity_item));
-        const isExpanded = expandedId === m.id;
-
-        return (
-          <Paper key={m.id} variant="outlined" sx={{ mb: 1.5, overflow: 'hidden' }}>
-            {/* ── レジメンヘッダー ── */}
-            <Box sx={{
-              px: 2, py: 1, bgcolor: m.is_active ? '#1c2833' : '#78909c',
-              display: 'flex', alignItems: 'center', gap: 1,
-              cursor: 'pointer', userSelect: 'none',
-            }}
-              onClick={() => setExpandedId(isExpanded ? null : m.id)}>
-              <Typography sx={{ fontWeight: 'bold', color: '#fff', fontSize: '0.92rem', flexGrow: 1 }}>
-                {m.regimen_name}
-              </Typography>
-              <Chip label={`${m.cycle_days}日周期`} size="small" sx={{ bgcolor: '#37474f', color: '#cfd8dc', fontSize: '0.7rem', height: 20 }} />
-              {!m.is_active && <Chip label="無効" size="small" sx={{ bgcolor: '#b0bec5', color: '#fff', fontSize: '0.7rem', height: 20 }} />}
-              <Tooltip title="編集">
-                <IconButton size="small" onClick={e => { e.stopPropagation(); setMasterDialog({ open: true, data: { ...m } }); }} sx={{ color: '#90caf9', p: 0.5 }}>
-                  <Edit sx={{ fontSize: 16 }} />
-                </IconButton>
-              </Tooltip>
-              <Tooltip title="削除">
-                <IconButton size="small" onClick={e => { e.stopPropagation(); setDeleteConfirm({ type: 'master', id: m.id }); }} sx={{ color: '#ef9a9a', p: 0.5 }}>
-                  <Delete sx={{ fontSize: 16 }} />
-                </IconButton>
-              </Tooltip>
-              {isExpanded ? <ExpandLess sx={{ color: '#aed6f1', fontSize: 20 }} /> : <ExpandMore sx={{ color: '#aed6f1', fontSize: 20 }} />}
-            </Box>
-            {m.description && (
-              <Box sx={{ px: 2, py: 0.5, bgcolor: '#263238' }}>
-                <Typography sx={{ fontSize: '0.75rem', color: '#b0bec5' }}>{m.description}</Typography>
-              </Box>
-            )}
-
-            <Collapse in={isExpanded}>
-              <Box sx={{ p: 2 }}>
-
-                {/* ── 薬剤テーブル ── */}
-                <Box sx={{ mb: 2 }}>
-                  <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-                    <Typography sx={{ fontWeight: 'bold', fontSize: '0.82rem', color: '#b71c1c' }}>💊 薬剤構成</Typography>
-                    <Box sx={{ flexGrow: 1 }} />
-                    <Button size="small" variant="outlined" startIcon={<Add />}
-                      sx={{ fontSize: '0.72rem', py: 0.2 }}
-                      onClick={() => setDrugDialog({ open: true, regimenId: m.id, data: { ...emptyDrug(), sort_order: mDrugs.length + 1 } })}>
-                      薬剤追加
-                    </Button>
-                  </Box>
-                  {mDrugs.length === 0 ? (
-                    <Typography variant="body2" color="text.secondary">薬剤登録なし</Typography>
-                  ) : (
-                    <TableContainer component={Paper} variant="outlined">
-                      <Table size="small">
-                        <TableHead sx={{ bgcolor: '#fce4e4' }}>
-                          <TableRow>
-                            <TableCell sx={{ fontSize: '0.7rem', py: 0.4, fontWeight: 'bold', width: 36 }}>順</TableCell>
-                            <TableCell sx={{ fontSize: '0.7rem', py: 0.4, fontWeight: 'bold' }}>薬品名</TableCell>
-                            <TableCell sx={{ fontSize: '0.7rem', py: 0.4, fontWeight: 'bold' }}>種別</TableCell>
-                            <TableCell sx={{ fontSize: '0.7rem', py: 0.4, fontWeight: 'bold' }} align="right">用量</TableCell>
-                            <TableCell sx={{ fontSize: '0.7rem', py: 0.4, fontWeight: 'bold' }}>単位/換算</TableCell>
-                            <TableCell sx={{ fontSize: '0.7rem', py: 0.4, fontWeight: 'bold' }}>溶媒</TableCell>
-                            <TableCell sx={{ fontSize: '0.7rem', py: 0.4, fontWeight: 'bold' }}>経路</TableCell>
-                            <TableCell sx={{ fontSize: '0.7rem', py: 0.4, fontWeight: 'bold' }}>滴下時間</TableCell>
-                            <TableCell sx={{ fontSize: '0.7rem', py: 0.4, fontWeight: 'bold' }}>備考</TableCell>
-                            <TableCell sx={{ width: 60 }} />
-                          </TableRow>
-                        </TableHead>
-                        <TableBody>
-                          {mDrugs.map(d => {
-                            const dt = DRUG_TYPE_LABELS[d.drug_type] || { label: d.drug_type, color: '#555', bg: '#f5f5f5' };
-                            return (
-                              <TableRow key={d.id} sx={{ bgcolor: dt.bg }}>
-                                <TableCell sx={{ fontSize: '0.75rem', py: 0.3, textAlign: 'center' }}>{d.sort_order}</TableCell>
-                                <TableCell sx={{ fontSize: '0.78rem', py: 0.3, fontWeight: d.drug_type === 'antineoplastic' ? 'bold' : 'normal', color: dt.color }}>
-                                  {d.drug_name}
-                                </TableCell>
-                                <TableCell sx={{ py: 0.3 }}>
-                                  <Chip label={dt.label} size="small"
-                                    sx={{ fontSize: '0.62rem', height: 16, bgcolor: dt.bg, color: dt.color, border: `1px solid ${dt.color}` }} />
-                                </TableCell>
-                                <TableCell sx={{ fontSize: '0.75rem', py: 0.3 }} align="right">
-                                  {d.base_dose ?? '—'}
-                                </TableCell>
-                                <TableCell sx={{ fontSize: '0.72rem', py: 0.3 }}>
-                                  {d.dose_unit && <span>{d.dose_unit}</span>}
-                                  {d.dose_per && <span style={{ color: '#888' }}> / {DOSE_PER_LABELS[d.dose_per] || d.dose_per}</span>}
-                                </TableCell>
-                                <TableCell sx={{ fontSize: '0.72rem', py: 0.3, color: '#555' }}>
-                                  {d.solvent_name ? `${d.solvent_name}${d.solvent_volume ? ` ${d.solvent_volume}mL` : ''}` : '—'}
-                                </TableCell>
-                                <TableCell sx={{ fontSize: '0.72rem', py: 0.3 }}>{d.route || '—'}</TableCell>
-                                <TableCell sx={{ fontSize: '0.72rem', py: 0.3 }}>{d.drip_time || '—'}</TableCell>
-                                <TableCell sx={{ fontSize: '0.7rem', py: 0.3, color: '#777' }}>{d.notes || ''}</TableCell>
-                                <TableCell sx={{ py: 0.2 }}>
-                                  <Box sx={{ display: 'flex', gap: 0.3 }}>
-                                    <IconButton size="small" sx={{ p: 0.3 }}
-                                      onClick={() => setDrugDialog({ open: true, regimenId: m.id, data: { ...d }, editId: d.id })}>
-                                      <Edit sx={{ fontSize: 14 }} />
-                                    </IconButton>
-                                    <IconButton size="small" sx={{ p: 0.3, color: '#c62828' }}
-                                      onClick={() => setDeleteConfirm({ type: 'drug', id: d.id })}>
-                                      <Delete sx={{ fontSize: 14 }} />
-                                    </IconButton>
-                                  </Box>
-                                </TableCell>
-                              </TableRow>
-                            );
-                          })}
-                        </TableBody>
-                      </Table>
-                    </TableContainer>
-                  )}
-                </Box>
-
-                <Divider sx={{ my: 1.5 }} />
-
-                {/* ── 毒性ルールテーブル ── */}
-                <Box>
-                  <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-                    <Typography sx={{ fontWeight: 'bold', fontSize: '0.82rem', color: '#6a1b9a' }}>⚠️ 毒性対処ルール（CTCAE）</Typography>
-                    <Box sx={{ flexGrow: 1 }} />
-                    <Button size="small" variant="outlined" startIcon={<Add />}
-                      sx={{ fontSize: '0.72rem', py: 0.2 }}
-                      onClick={() => setToxDialog({ open: true, regimenId: m.id, data: emptyToxicity() })}>
-                      ルール追加
-                    </Button>
-                  </Box>
-                  {mTox.length === 0 ? (
-                    <Typography variant="body2" color="text.secondary">毒性ルール登録なし</Typography>
-                  ) : (
-                    <TableContainer component={Paper} variant="outlined">
-                      <Table size="small">
-                        <TableHead sx={{ bgcolor: '#f3e5f5' }}>
-                          <TableRow>
-                            <TableCell sx={{ fontSize: '0.7rem', py: 0.4, fontWeight: 'bold' }}>毒性項目</TableCell>
-                            {([1, 2, 3, 4] as const).map(g => (
-                              <TableCell key={g} sx={{ fontSize: '0.7rem', py: 0.4, fontWeight: 'bold', ...gradeColor(g), borderRadius: 0 }}>
-                                Grade {g}
-                              </TableCell>
-                            ))}
-                            <TableCell sx={{ fontSize: '0.7rem', py: 0.4, fontWeight: 'bold' }}>備考</TableCell>
-                            <TableCell sx={{ width: 60 }} />
-                          </TableRow>
-                        </TableHead>
-                        <TableBody>
-                          {mTox.map(t => (
-                            <TableRow key={t.id}>
-                              <TableCell sx={{ fontSize: '0.78rem', py: 0.3, fontWeight: 'bold' }}>{t.toxicity_item}</TableCell>
-                              {([1, 2, 3, 4] as const).map(g => {
-                                const action = t[`grade${g}_action` as keyof ToxicityRule] as string;
-                                const gc = gradeColor(g);
-                                return (
-                                  <TableCell key={g} sx={{ fontSize: '0.72rem', py: 0.3, bgcolor: gc.bg, color: gc.color }}>
-                                    {action}
-                                  </TableCell>
-                                );
-                              })}
-                              <TableCell sx={{ fontSize: '0.7rem', py: 0.3, color: '#777' }}>{t.notes || ''}</TableCell>
-                              <TableCell sx={{ py: 0.2 }}>
-                                <Box sx={{ display: 'flex', gap: 0.3 }}>
-                                  <IconButton size="small" sx={{ p: 0.3 }}
-                                    onClick={() => setToxDialog({ open: true, regimenId: m.id, data: { ...t }, editId: t.id })}>
-                                    <Edit sx={{ fontSize: 14 }} />
-                                  </IconButton>
-                                  <IconButton size="small" sx={{ p: 0.3, color: '#c62828' }}
-                                    onClick={() => setDeleteConfirm({ type: 'toxicity', id: t.id })}>
-                                    <Delete sx={{ fontSize: 14 }} />
-                                  </IconButton>
-                                </Box>
-                              </TableCell>
-                            </TableRow>
-                          ))}
-                        </TableBody>
-                      </Table>
-                    </TableContainer>
-                  )}
-                </Box>
-
-              </Box>
-            </Collapse>
-          </Paper>
-        );
-      })}
+      {loading ? (
+        <Box sx={{ py: 6, display: 'flex', justifyContent: 'center' }}>
+          <CircularProgress />
         </Box>
-      ))}
+      ) : grouped.length === 0 ? (
+        <Paper variant="outlined" sx={{ p: 3 }}>
+          <Typography sx={{ color: '#607d8b' }}>取り込み済みデータはありません</Typography>
+        </Paper>
+      ) : (
+        <Stack spacing={2}>
+          {grouped.map((group) => (
+            <Paper key={group.regimenKey} variant="outlined" sx={{ overflow: 'hidden' }}>
+              <Box sx={{ px: 1.5, py: 0.9, bgcolor: '#f4f7fb', borderBottom: '1px solid #dfe6ee' }}>
+                <Stack direction="row" spacing={1} alignItems="center">
+                  <Typography sx={{ fontWeight: 'bold' }}>{group.regimenName}</Typography>
+                  <Chip size="small" label={`${group.items.length} 件`} />
+                </Stack>
+              </Box>
+              <TableContainer>
+                <Table size="small">
+                  <TableHead>
+                    <TableRow>
+                      <TableCell sx={{ width: 120 }}>診療科</TableCell>
+                      <TableCell sx={{ width: 280 }}>タイトル</TableCell>
+                      <TableCell>ソース</TableCell>
+                      <TableCell sx={{ width: 180 }}>取込日時</TableCell>
+                      <TableCell sx={{ width: 210 }} />
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {group.items.map((item) => {
+                      const title = item.source_title || basename(item.source_file) || item.regimen_name;
+                      return (
+                        <TableRow key={item.id} hover>
+                          <TableCell>{item.department || '-'}</TableCell>
+                          <TableCell>{title}</TableCell>
+                          <TableCell sx={{ color: '#546e7a' }}>{item.source_file || '-'}</TableCell>
+                          <TableCell>{fmtDateTime(item.imported_at)}</TableCell>
+                          <TableCell>
+                            <Stack direction="row" spacing={0.5} justifyContent="flex-end">
+                              <Tooltip title="表示">
+                                <IconButton size="small" onClick={() => void openPreview(item.id)}>
+                                  <Visibility sx={{ fontSize: 18 }} />
+                                </IconButton>
+                              </Tooltip>
+                              <Tooltip title="編集">
+                                <IconButton size="small" onClick={() => void openEdit(item.id)}>
+                                  <Edit sx={{ fontSize: 18 }} />
+                                </IconButton>
+                              </Tooltip>
+                              <Tooltip title="DB化（適格基準/用量/有害事象）">
+                                <span>
+                                  <IconButton
+                                    size="small"
+                                    color="primary"
+                                    disabled={convertingSourceId === item.id}
+                                    onClick={() => void handleBuildDecisionSupport(item.id)}
+                                  >
+                                    <Analytics sx={{ fontSize: 18 }} />
+                                  </IconButton>
+                                </span>
+                              </Tooltip>
+                              <Tooltip title="DB化データ確認/編集">
+                                <IconButton size="small" color="secondary" onClick={() => void openDecisionEdit(item)}>
+                                  <Settings sx={{ fontSize: 18 }} />
+                                </IconButton>
+                              </Tooltip>
+                              <Tooltip title="削除">
+                                <IconButton size="small" color="error" onClick={() => void handleDeleteSource(item.id)}>
+                                  <Delete sx={{ fontSize: 18 }} />
+                                </IconButton>
+                              </Tooltip>
+                            </Stack>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            </Paper>
+          ))}
+        </Stack>
+      )}
 
-      {/* ── レジメンマスタ 編集ダイアログ ── */}
-      <Dialog open={masterDialog.open} onClose={() => setMasterDialog({ open: false, data: {} })} maxWidth="sm" fullWidth>
-        <DialogTitle sx={{ fontSize: '0.95rem', pb: 1 }}>
-          {masterDialog.data.id ? 'レジメン編集' : '新規レジメン追加'}
+      <Dialog open={Boolean(preview)} onClose={() => setPreview(null)} maxWidth="lg" fullWidth>
+        <DialogTitle>
+          {preview ? `プレビュー: ${preview.regimen_name}` : 'プレビュー'}
         </DialogTitle>
-        <DialogContent>
-          <Stack spacing={1.5} sx={{ mt: 0.5 }}>
-            <TextField required label="レジメン名" size="small" fullWidth
-              value={masterDialog.data.regimen_name || ''}
-              onChange={e => setMasterDialog(prev => ({ ...prev, data: { ...prev.data, regimen_name: e.target.value } }))} />
-            <TextField label="カテゴリ（例: 大腸癌, 乳癌）" size="small" fullWidth
-              value={masterDialog.data.category || ''}
-              onChange={e => setMasterDialog(prev => ({ ...prev, data: { ...prev.data, category: e.target.value } }))}
-              InputProps={{ inputProps: { list: 'category-list' } }}
+        <DialogContent dividers>
+          {!preview ? null : isUrl(preview.source_file) ? (
+            <Box sx={{ height: '72vh' }}>
+              <iframe
+                title="guideline-preview-url"
+                src={preview.source_file || ''}
+                style={{ width: '100%', height: '100%', border: 'none' }}
+              />
+            </Box>
+          ) : looksLikeHtml(preview.markdown_content) ? (
+            <Box sx={{ height: '72vh' }}>
+              <iframe
+                title="guideline-preview-html"
+                srcDoc={preview.markdown_content}
+                style={{ width: '100%', height: '100%', border: 'none' }}
+              />
+            </Box>
+          ) : (
+            <Typography
+              component="pre"
+              sx={{
+                m: 0,
+                fontSize: '0.8rem',
+                lineHeight: 1.5,
+                whiteSpace: 'pre-wrap',
+                fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
+              }}
+            >
+              {preview.markdown_content}
+            </Typography>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setPreview(null)}>閉じる</Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog open={Boolean(decisionEdit)} onClose={() => setDecisionEdit(null)} maxWidth="xl" fullWidth>
+        <DialogTitle>
+          {decisionEdit ? `DB化データ編集: ${decisionEdit.regimenName}` : 'DB化データ編集'}
+        </DialogTitle>
+        <DialogContent dividers>
+          {!decisionEdit ? null : (
+            <Stack spacing={2}>
+              <Paper variant="outlined" sx={{ p: 1 }}>
+                <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 1 }}>
+                  <Typography sx={{ fontWeight: 'bold' }}>適格基準（開始基準）</Typography>
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    onClick={() => setDecisionEdit((prev) => prev ? ({
+                      ...prev,
+                      criteria: [...prev.criteria, {
+                        metric_key: 'anc',
+                        comparator: '>=',
+                        threshold_value: 1.5,
+                        threshold_unit: 'x10^3/uL',
+                        criterion_text: '',
+                        section_type: 'start_criteria',
+                        source_section: '',
+                      }],
+                    }) : prev)}
+                  >
+                    行追加
+                  </Button>
+                </Stack>
+                <Table size="small">
+                  <TableHead>
+                    <TableRow>
+                      <TableCell>項目</TableCell>
+                      <TableCell>比較</TableCell>
+                      <TableCell>閾値</TableCell>
+                      <TableCell>単位</TableCell>
+                      <TableCell>基準文</TableCell>
+                      <TableCell sx={{ width: 80 }} />
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {decisionEdit.criteria.map((row, index) => (
+                      <TableRow key={`criteria-${index}`}>
+                        <TableCell>
+                          <TextField size="small" value={row.metric_key} onChange={(e) => setDecisionEdit((prev) => {
+                            if (!prev) return prev;
+                            const next = [...prev.criteria];
+                            next[index] = { ...next[index], metric_key: e.target.value };
+                            return { ...prev, criteria: next };
+                          })} />
+                        </TableCell>
+                        <TableCell>
+                          <TextField size="small" value={row.comparator} onChange={(e) => setDecisionEdit((prev) => {
+                            if (!prev) return prev;
+                            const next = [...prev.criteria];
+                            next[index] = { ...next[index], comparator: e.target.value };
+                            return { ...prev, criteria: next };
+                          })} />
+                        </TableCell>
+                        <TableCell>
+                          <TextField size="small" type="number" value={row.threshold_value} onChange={(e) => setDecisionEdit((prev) => {
+                            if (!prev) return prev;
+                            const next = [...prev.criteria];
+                            next[index] = { ...next[index], threshold_value: Number(e.target.value || 0) };
+                            return { ...prev, criteria: next };
+                          })} />
+                        </TableCell>
+                        <TableCell>
+                          <TextField size="small" value={row.threshold_unit || ''} onChange={(e) => setDecisionEdit((prev) => {
+                            if (!prev) return prev;
+                            const next = [...prev.criteria];
+                            next[index] = { ...next[index], threshold_unit: e.target.value };
+                            return { ...prev, criteria: next };
+                          })} />
+                        </TableCell>
+                        <TableCell>
+                          <TextField size="small" fullWidth value={row.criterion_text} onChange={(e) => setDecisionEdit((prev) => {
+                            if (!prev) return prev;
+                            const next = [...prev.criteria];
+                            next[index] = { ...next[index], criterion_text: e.target.value };
+                            return { ...prev, criteria: next };
+                          })} />
+                        </TableCell>
+                        <TableCell align="right">
+                          <Button size="small" color="error" onClick={() => setDecisionEdit((prev) => {
+                            if (!prev) return prev;
+                            return { ...prev, criteria: prev.criteria.filter((_, i) => i !== index) };
+                          })}>
+                            削除
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </Paper>
+
+              <Paper variant="outlined" sx={{ p: 1 }}>
+                <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 1 }}>
+                  <Typography sx={{ fontWeight: 'bold' }}>用量レベル</Typography>
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    onClick={() => setDecisionEdit((prev) => prev ? ({
+                      ...prev,
+                      doseLevels: [...prev.doseLevels, {
+                        drug_name: '',
+                        level_index: 0,
+                        level_label: '通常量',
+                        dose_text: '',
+                        dose_unit: '',
+                        per_basis: '',
+                        is_discontinue: false,
+                        section_type: 'dose_level',
+                        source_section: '',
+                      }],
+                    }) : prev)}
+                  >
+                    行追加
+                  </Button>
+                </Stack>
+                <Table size="small">
+                  <TableHead>
+                    <TableRow>
+                      <TableCell>薬剤名</TableCell>
+                      <TableCell>段階</TableCell>
+                      <TableCell>ラベル</TableCell>
+                      <TableCell>用量</TableCell>
+                      <TableCell>中止</TableCell>
+                      <TableCell sx={{ width: 80 }} />
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {decisionEdit.doseLevels.map((row, index) => (
+                      <TableRow key={`dose-${index}`}>
+                        <TableCell>
+                          <TextField size="small" value={row.drug_name} onChange={(e) => setDecisionEdit((prev) => {
+                            if (!prev) return prev;
+                            const next = [...prev.doseLevels];
+                            next[index] = { ...next[index], drug_name: e.target.value };
+                            return { ...prev, doseLevels: next };
+                          })} />
+                        </TableCell>
+                        <TableCell>
+                          <TextField size="small" type="number" value={row.level_index} onChange={(e) => setDecisionEdit((prev) => {
+                            if (!prev) return prev;
+                            const next = [...prev.doseLevels];
+                            next[index] = { ...next[index], level_index: Number(e.target.value || 0) };
+                            return { ...prev, doseLevels: next };
+                          })} />
+                        </TableCell>
+                        <TableCell>
+                          <TextField size="small" value={row.level_label} onChange={(e) => setDecisionEdit((prev) => {
+                            if (!prev) return prev;
+                            const next = [...prev.doseLevels];
+                            next[index] = { ...next[index], level_label: e.target.value };
+                            return { ...prev, doseLevels: next };
+                          })} />
+                        </TableCell>
+                        <TableCell>
+                          <TextField size="small" fullWidth value={row.dose_text} onChange={(e) => setDecisionEdit((prev) => {
+                            if (!prev) return prev;
+                            const next = [...prev.doseLevels];
+                            next[index] = { ...next[index], dose_text: e.target.value };
+                            return { ...prev, doseLevels: next };
+                          })} />
+                        </TableCell>
+                        <TableCell>
+                          <Button size="small" variant={row.is_discontinue ? 'contained' : 'outlined'} onClick={() => setDecisionEdit((prev) => {
+                            if (!prev) return prev;
+                            const next = [...prev.doseLevels];
+                            next[index] = { ...next[index], is_discontinue: !next[index].is_discontinue };
+                            return { ...prev, doseLevels: next };
+                          })}>
+                            {row.is_discontinue ? '中止' : '継続'}
+                          </Button>
+                        </TableCell>
+                        <TableCell align="right">
+                          <Button size="small" color="error" onClick={() => setDecisionEdit((prev) => {
+                            if (!prev) return prev;
+                            return { ...prev, doseLevels: prev.doseLevels.filter((_, i) => i !== index) };
+                          })}>
+                            削除
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </Paper>
+
+              <Paper variant="outlined" sx={{ p: 1 }}>
+                <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 1 }}>
+                  <Typography sx={{ fontWeight: 'bold' }}>有害事象対応</Typography>
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    onClick={() => setDecisionEdit((prev) => prev ? ({
+                      ...prev,
+                      toxicityActions: [...prev.toxicityActions, {
+                        toxicity_name: '',
+                        condition_text: '',
+                        action_text: '',
+                        level_delta: 0,
+                        hold_flag: false,
+                        discontinue_flag: false,
+                        priority: 100,
+                        section_type: 'adverse_event',
+                        source_section: '',
+                      }],
+                    }) : prev)}
+                  >
+                    行追加
+                  </Button>
+                </Stack>
+                <Table size="small">
+                  <TableHead>
+                    <TableRow>
+                      <TableCell>有害事象</TableCell>
+                      <TableCell>基準</TableCell>
+                      <TableCell>処置</TableCell>
+                      <TableCell>減量段階</TableCell>
+                      <TableCell>休薬/中止</TableCell>
+                      <TableCell sx={{ width: 80 }} />
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {decisionEdit.toxicityActions.map((row, index) => (
+                      <TableRow key={`tox-${index}`}>
+                        <TableCell>
+                          <TextField size="small" value={row.toxicity_name} onChange={(e) => setDecisionEdit((prev) => {
+                            if (!prev) return prev;
+                            const next = [...prev.toxicityActions];
+                            next[index] = { ...next[index], toxicity_name: e.target.value };
+                            return { ...prev, toxicityActions: next };
+                          })} />
+                        </TableCell>
+                        <TableCell>
+                          <TextField size="small" fullWidth value={row.condition_text} onChange={(e) => setDecisionEdit((prev) => {
+                            if (!prev) return prev;
+                            const next = [...prev.toxicityActions];
+                            next[index] = { ...next[index], condition_text: e.target.value };
+                            return { ...prev, toxicityActions: next };
+                          })} />
+                        </TableCell>
+                        <TableCell>
+                          <TextField size="small" fullWidth value={row.action_text} onChange={(e) => setDecisionEdit((prev) => {
+                            if (!prev) return prev;
+                            const next = [...prev.toxicityActions];
+                            next[index] = { ...next[index], action_text: e.target.value };
+                            return { ...prev, toxicityActions: next };
+                          })} />
+                        </TableCell>
+                        <TableCell>
+                          <TextField size="small" type="number" value={row.level_delta ?? 0} onChange={(e) => setDecisionEdit((prev) => {
+                            if (!prev) return prev;
+                            const next = [...prev.toxicityActions];
+                            next[index] = { ...next[index], level_delta: Number(e.target.value || 0) };
+                            return { ...prev, toxicityActions: next };
+                          })} />
+                        </TableCell>
+                        <TableCell>
+                          <Stack direction="row" spacing={0.5}>
+                            <Button size="small" variant={row.hold_flag ? 'contained' : 'outlined'} onClick={() => setDecisionEdit((prev) => {
+                              if (!prev) return prev;
+                              const next = [...prev.toxicityActions];
+                              next[index] = { ...next[index], hold_flag: !next[index].hold_flag };
+                              return { ...prev, toxicityActions: next };
+                            })}>休薬</Button>
+                            <Button size="small" color="error" variant={row.discontinue_flag ? 'contained' : 'outlined'} onClick={() => setDecisionEdit((prev) => {
+                              if (!prev) return prev;
+                              const next = [...prev.toxicityActions];
+                              next[index] = { ...next[index], discontinue_flag: !next[index].discontinue_flag };
+                              return { ...prev, toxicityActions: next };
+                            })}>中止</Button>
+                          </Stack>
+                        </TableCell>
+                        <TableCell align="right">
+                          <Button size="small" color="error" onClick={() => setDecisionEdit((prev) => {
+                            if (!prev) return prev;
+                            return { ...prev, toxicityActions: prev.toxicityActions.filter((_, i) => i !== index) };
+                          })}>
+                            削除
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </Paper>
+            </Stack>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setDecisionEdit(null)} disabled={savingDecisionEdit}>キャンセル</Button>
+          <Button variant="contained" onClick={() => void handleSaveDecisionEdit()} disabled={savingDecisionEdit || !decisionEdit}>
+            保存
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog open={Boolean(edit)} onClose={() => setEdit(null)} maxWidth="lg" fullWidth>
+        <DialogTitle>ガイドライン編集</DialogTitle>
+        <DialogContent dividers>
+          <Stack spacing={1.2} sx={{ mt: 0.5 }}>
+            <TextField
+              size="small"
+              label="診療科"
+              value={edit?.department || ''}
+              onChange={(e) => setEdit((prev) => (prev ? { ...prev, department: e.target.value } : prev))}
             />
-            <datalist id="category-list">
-              {categories.map(c => <option key={c} value={c} />)}
-            </datalist>
-            <TextField label="サイクル日数" size="small" type="number" fullWidth
-              value={masterDialog.data.cycle_days ?? 21}
-              onChange={e => setMasterDialog(prev => ({ ...prev, data: { ...prev.data, cycle_days: Number(e.target.value) } }))} />
-            <TextField label="説明・備考" size="small" multiline rows={2} fullWidth
-              value={masterDialog.data.description || ''}
-              onChange={e => setMasterDialog(prev => ({ ...prev, data: { ...prev.data, description: e.target.value } }))} />
-            <FormControlLabel
-              control={<Switch checked={masterDialog.data.is_active !== false}
-                onChange={e => setMasterDialog(prev => ({ ...prev, data: { ...prev.data, is_active: e.target.checked } }))} />}
-              label="有効" />
+            <TextField
+              size="small"
+              label="レジメン名"
+              value={edit?.regimenName || ''}
+              onChange={(e) => setEdit((prev) => (prev ? { ...prev, regimenName: e.target.value } : prev))}
+            />
+            <TextField
+              size="small"
+              label="タイトル"
+              value={edit?.sourceTitle || ''}
+              onChange={(e) => setEdit((prev) => (prev ? { ...prev, sourceTitle: e.target.value } : prev))}
+            />
+            <TextField
+              label="内容"
+              multiline
+              minRows={16}
+              value={edit?.markdownContent || ''}
+              onChange={(e) => setEdit((prev) => (prev ? { ...prev, markdownContent: e.target.value } : prev))}
+            />
           </Stack>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setMasterDialog({ open: false, data: {} })}>キャンセル</Button>
-          <Button variant="contained" startIcon={<Save />} onClick={handleSaveMaster}
-            disabled={masterSaving || !masterDialog.data.regimen_name?.trim()}>
+          <Button onClick={() => setEdit(null)} disabled={savingEdit}>キャンセル</Button>
+          <Button variant="contained" onClick={() => void handleSaveEdit()} disabled={savingEdit || !edit}>
             保存
           </Button>
-        </DialogActions>
-      </Dialog>
-
-      {/* ── 薬剤 編集ダイアログ ── */}
-      <Dialog open={drugDialog.open} onClose={() => setDrugDialog(prev => ({ ...prev, open: false }))} maxWidth="sm" fullWidth>
-        <DialogTitle sx={{ fontSize: '0.95rem', pb: 1 }}>
-          {drugDialog.editId ? '薬剤編集' : '薬剤追加'}
-        </DialogTitle>
-        <DialogContent>
-          <Stack spacing={1.5} sx={{ mt: 0.5 }}>
-            <Box sx={{ display: 'grid', gridTemplateColumns: '60px 1fr', gap: 1 }}>
-              <TextField label="順序" size="small" type="number"
-                value={drugDialog.data.sort_order ?? 1}
-                onChange={e => setDrugDialog(prev => ({ ...prev, data: { ...prev.data, sort_order: Number(e.target.value) } }))} />
-              <TextField required label="薬品名" size="small"
-                value={drugDialog.data.drug_name || ''}
-                onChange={e => setDrugDialog(prev => ({ ...prev, data: { ...prev.data, drug_name: e.target.value } }))} />
-            </Box>
-            <FormControl size="small" fullWidth>
-              <InputLabel>種別</InputLabel>
-              <Select value={drugDialog.data.drug_type || 'antineoplastic'} label="種別"
-                onChange={e => setDrugDialog(prev => ({ ...prev, data: { ...prev.data, drug_type: e.target.value } }))}>
-                {Object.entries(DRUG_TYPE_LABELS).map(([k, v]) => (
-                  <MenuItem key={k} value={k}>{v.label}</MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-            <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 100px 1fr', gap: 1 }}>
-              <TextField label="基準用量" size="small" type="number"
-                value={drugDialog.data.base_dose ?? ''}
-                onChange={e => setDrugDialog(prev => ({ ...prev, data: { ...prev.data, base_dose: e.target.value ? Number(e.target.value) : undefined } }))} />
-              <TextField label="単位" size="small"
-                value={drugDialog.data.dose_unit || ''}
-                onChange={e => setDrugDialog(prev => ({ ...prev, data: { ...prev.data, dose_unit: e.target.value } }))} />
-              <FormControl size="small">
-                <InputLabel>換算基準</InputLabel>
-                <Select value={drugDialog.data.dose_per || 'BSA'} label="換算基準"
-                  onChange={e => setDrugDialog(prev => ({ ...prev, data: { ...prev.data, dose_per: e.target.value } }))}>
-                  {Object.entries(DOSE_PER_LABELS).map(([k, v]) => <MenuItem key={k} value={k}>{v}</MenuItem>)}
-                </Select>
-              </FormControl>
-            </Box>
-            <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 80px', gap: 1 }}>
-              <TextField label="溶媒名" size="small"
-                value={drugDialog.data.solvent_name || ''}
-                onChange={e => setDrugDialog(prev => ({ ...prev, data: { ...prev.data, solvent_name: e.target.value } }))} />
-              <TextField label="溶媒量(mL)" size="small" type="number"
-                value={drugDialog.data.solvent_volume ?? ''}
-                onChange={e => setDrugDialog(prev => ({ ...prev, data: { ...prev.data, solvent_volume: e.target.value ? Number(e.target.value) : undefined } }))} />
-            </Box>
-            <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1 }}>
-              <TextField label="投与経路" size="small"
-                value={drugDialog.data.route || ''}
-                onChange={e => setDrugDialog(prev => ({ ...prev, data: { ...prev.data, route: e.target.value } }))} />
-              <TextField label="点滴時間" size="small"
-                value={drugDialog.data.drip_time || ''}
-                onChange={e => setDrugDialog(prev => ({ ...prev, data: { ...prev.data, drip_time: e.target.value } }))} />
-            </Box>
-            <TextField label="備考" size="small" multiline rows={2} fullWidth
-              value={drugDialog.data.notes || ''}
-              onChange={e => setDrugDialog(prev => ({ ...prev, data: { ...prev.data, notes: e.target.value } }))} />
-          </Stack>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setDrugDialog(prev => ({ ...prev, open: false }))}>キャンセル</Button>
-          <Button variant="contained" startIcon={<Save />} onClick={handleSaveDrug}
-            disabled={drugSaving || !drugDialog.data.drug_name?.trim()}>
-            保存
-          </Button>
-        </DialogActions>
-      </Dialog>
-
-      {/* ── 毒性ルール 編集ダイアログ ── */}
-      <Dialog open={toxDialog.open} onClose={() => setToxDialog(prev => ({ ...prev, open: false }))} maxWidth="sm" fullWidth>
-        <DialogTitle sx={{ fontSize: '0.95rem', pb: 1 }}>
-          {toxDialog.editId ? '毒性ルール編集' : '毒性ルール追加'}
-        </DialogTitle>
-        <DialogContent>
-          <Stack spacing={1.5} sx={{ mt: 0.5 }}>
-            <TextField required label="毒性項目（例: ANC, 末梢神経障害）" size="small" fullWidth
-              value={toxDialog.data.toxicity_item || ''}
-              onChange={e => setToxDialog(prev => ({ ...prev, data: { ...prev.data, toxicity_item: e.target.value } }))} />
-            {([1, 2, 3, 4] as const).map(g => {
-              const gc = gradeColor(g);
-              const key = `grade${g}_action` as keyof ToxicityRule;
-              return (
-                <TextField key={g}
-                  label={`Grade ${g} 対処`} size="small" fullWidth
-                  value={(toxDialog.data[key] as string) || ''}
-                  onChange={e => setToxDialog(prev => ({ ...prev, data: { ...prev.data, [key]: e.target.value } }))}
-                  sx={{ '& .MuiInputBase-root': { bgcolor: gc.bg } }} />
-              );
-            })}
-            <TextField label="備考" size="small" multiline rows={2} fullWidth
-              value={toxDialog.data.notes || ''}
-              onChange={e => setToxDialog(prev => ({ ...prev, data: { ...prev.data, notes: e.target.value } }))} />
-          </Stack>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setToxDialog(prev => ({ ...prev, open: false }))}>キャンセル</Button>
-          <Button variant="contained" startIcon={<Save />} onClick={handleSaveToxicity}
-            disabled={toxSaving || !toxDialog.data.toxicity_item?.trim()}>
-            保存
-          </Button>
-        </DialogActions>
-      </Dialog>
-
-      {/* ── 削除確認ダイアログ ── */}
-      <Dialog open={!!deleteConfirm} onClose={() => setDeleteConfirm(null)} maxWidth="xs">
-        <DialogTitle sx={{ fontSize: '0.92rem' }}>削除の確認</DialogTitle>
-        <DialogContent>
-          <Typography variant="body2">
-            {deleteConfirm?.type === 'master' ? 'このレジメン（薬剤・ルールを含む）' :
-             deleteConfirm?.type === 'drug' ? 'この薬剤' : 'この毒性ルール'}
-            を削除しますか？
-          </Typography>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setDeleteConfirm(null)} startIcon={<Close />}>キャンセル</Button>
-          <Button variant="contained" color="error" startIcon={<Delete />} onClick={handleDelete}>削除</Button>
         </DialogActions>
       </Dialog>
     </Box>

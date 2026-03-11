@@ -1,6 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
+import type { NextFunction, Request, Response } from 'express';
 import authRouter from './routes/auth';
 import treatmentsRouter from './routes/treatments';
 import interventionsRouter from './routes/interventions';
@@ -14,6 +15,7 @@ import adminRouter from './routes/admin';
 import guidanceRouter  from './routes/guidance';
 import dwhSyncRouter   from './routes/dwh-sync';
 import regimenCheckRouter from './routes/regimen-check';
+import handbookRouter from './routes/handbook';
 
 dotenv.config();
 
@@ -28,7 +30,8 @@ app.use(
     credentials: true,
   })
 );
-app.use(express.json());
+app.use(express.json({ limit: '20mb' }));
+app.use(express.urlencoded({ extended: true, limit: '20mb' }));
 
 // Health check
 app.get('/api/health', (_, res) => {
@@ -49,6 +52,15 @@ app.use('/api/admin',            adminRouter);
 app.use('/api/guidance',         guidanceRouter);
 app.use('/api/dwh-sync',         dwhSyncRouter);
 app.use('/api/regimen-check',    regimenCheckRouter);
+app.use('/api/handbook',         handbookRouter);
+
+app.use((err: any, _req: Request, res: Response, next: NextFunction) => {
+  if (err?.type === 'entity.too.large') {
+    res.status(413).json({ error: '送信データが大きすぎます（上限20MB）' });
+    return;
+  }
+  next(err);
+});
 
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);

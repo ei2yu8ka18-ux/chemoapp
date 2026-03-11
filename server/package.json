@@ -13,7 +13,8 @@
     "express": "^4.19.2",
     "jsonwebtoken": "^9.0.2",
     "odbc": "^2.4.9",
-    "pg": "^8.12.0"
+    "pg": "^8.12.0",
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "@types/bcryptjs": "^2.4.6",

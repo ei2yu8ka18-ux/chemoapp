@@ -1,0 +1,50 @@
+﻿{
+  "version": "1.0",
+  "generatedAt": "2026-03-11T00:00:00.000Z",
+  "records": [
+    {
+      "regimenName": "FOLFOXIRI＋Bmab",
+      "department": "消化器内科",
+      "sourceTitle": "HOKUTO FOLFOXIRI",
+      "sourceFile": "hokuto:Qe9X2zNRHUrBc42gdxsw",
+      "markdownContent": "# FOLFOXIRI",
+      "decisionSupport": {
+        "criteria": [
+          {
+            "metric_key": "anc",
+            "comparator": ">=",
+            "threshold_value": 1.5,
+            "threshold_unit": "x10^3/uL",
+            "criterion_text": "好中球数≧1,500/μL",
+            "is_required": true,
+            "section_type": "start_criteria",
+            "source_section": "投与開始基準"
+          }
+        ],
+        "doseLevels": [
+          {
+            "drug_name": "CPT-11",
+            "level_index": 0,
+            "level_label": "初回投与量",
+            "dose_text": "165 mg/m2",
+            "section_type": "dose_level",
+            "source_section": "減量レベル"
+          }
+        ],
+        "toxicityActions": [
+          {
+            "toxicity_name": "下痢",
+            "condition_text": "Grade 4",
+            "action_text": "2段階減量",
+            "level_delta": 2,
+            "hold_flag": false,
+            "discontinue_flag": false,
+            "priority": 20,
+            "section_type": "dose_reduction_criteria",
+            "source_section": "減量基準"
+          }
+        ]
+      }
+    }
+  ]
+}

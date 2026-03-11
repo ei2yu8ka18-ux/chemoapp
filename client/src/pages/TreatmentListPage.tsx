@@ -59,7 +59,8 @@ function getGrade(key: keyof BloodResults, value: number): 0 | 1 | 2 | 3 | 4 {
   switch (key) {
     case 'wbc':  return value < 1.0 ? 4 : value < 2.0 ? 3 : value < 3.0 ? 2 : value < 4.0 ? 1 : 0;
     case 'hgb':  return value < 6.5 ? 4 : value < 8.0 ? 3 : value < 10.0 ? 2 : value < 11.0 ? 1 : 0;
-    case 'plt':  return value < 25  ? 4 : value < 50  ? 3 : value < 75   ? 2 : value < 100  ? 1 : 0;
+    // Plt is stored as x10^4/uL in this app (e.g. 8.5 = 85,000/uL)
+    case 'plt':  return value < 2.5 ? 4 : value < 5.0 ? 3 : value < 7.5  ? 2 : value < 10.0 ? 1 : 0;
     case 'anc':  return value < 0.5 ? 4 : value < 1.0 ? 3 : value < 1.5  ? 2 : value < 2.0  ? 1 : 0;
     case 'ast':
     case 'alt':  return value > 800 ? 4 : value > 200 ? 3 : value > 120  ? 2 : value > 40   ? 1 : 0;
@@ -99,7 +100,13 @@ const PRESC_BG: Record<string, string> = {
 };
 function PrescChips({ value }: { value: string | null }) {
   if (!value) return null;
-  const types = value.split(',').map(s => s.trim()).filter(Boolean);
+  const hidden = new Set(['injection']);
+  const types = value
+    .split(',')
+    .map(s => s.trim())
+    .filter(Boolean)
+    .filter(t => !hidden.has(t.toLowerCase()));
+  if (types.length === 0) return null;
   return (
     <Box sx={{ display: 'flex', gap: 0.25, flexWrap: 'wrap', mt: 0.25 }}>
       {types.map(t => (
@@ -133,6 +140,21 @@ function fmtTime(iso: string | null): string {
 function fmtBlood(v: number): string {
   if (v === Math.floor(v)) return v.toString();
   return v.toFixed(2);
+}
+
+function metricLabel(metricKey: string): string {
+  const map: Record<string, string> = {
+    anc: '好中球',
+    plt: '血小板',
+    hgb: 'Hb',
+    cre: 'Cre',
+    egfr: 'eGFR',
+    ast: 'AST',
+    alt: 'ALT',
+    tbil: 'T-Bil',
+    lvef: 'LVEF',
+  };
+  return map[metricKey] || metricKey;
 }
 
 const todayStr = new Date().toISOString().split('T')[0];
@@ -331,18 +353,6 @@ export default function TreatmentListPage() {
   };
 
   // 注射/内服区分切替
-  const handleCategoryToggle = async (id: number, current: '注射' | '内服') => {
-    const next: '注射' | '内服' = current === '注射' ? '内服' : '注射';
-    try {
-      await api.patch(`/treatments/${id}/category`, { treatment_category: next });
-      setTreatments(prev => prev.map(t =>
-        t.id === id ? { ...t, treatment_category: next } : t
-      ));
-    } catch {
-      /* ignore */
-    }
-  };
-
   // 備考保存
   const handleMemoSave = async () => {
     if (!memoDialog) return;
@@ -379,6 +389,20 @@ export default function TreatmentListPage() {
   const cancelCount  = treatments.filter(t => t.status === 'cancelled').length;
   const changedCount = treatments.filter(t => t.status === 'changed').length;
   const remaining    = treatments.length - doneCount - cancelCount - changedCount;
+  const remainingCheer = (() => {
+    switch (remaining) {
+      case 0:
+        return '\u4ECA\u65E5\u3082\u304A\u75B2\u308C\u69D8\u3067\u3057\u305F\uFF01';
+      case 5:
+        return '\u3042\u3068\u5C11\u3057\uFF01\u30D5\u30A1\u30A4\u30C8\uFF01';
+      case 2:
+        return '\u3082\u3046\u3061\u3087\u3044\uFF01';
+      case 1:
+        return '\u30E9\u30B9\u30C8\u30B9\u30D1\u30FC\u30C8\uFF01';
+      default:
+        return null;
+    }
+  })();
 
   const btnSx = {
     fontSize: '0.68rem', py: 0.25, px: 0.75,
@@ -424,6 +448,19 @@ export default function TreatmentListPage() {
           <Typography variant="body2" sx={{ fontSize: '0.65rem', color: '#d6eaf8' }}>
             （実施 {doneCount}・中止 {cancelCount}・変更 {changedCount}）
           </Typography>
+          {remainingCheer && (
+            <Chip
+              size="small"
+              label={remainingCheer}
+              sx={{
+                fontSize: '0.68rem',
+                fontWeight: 'bold',
+                height: 22,
+                bgcolor: remaining === 0 ? '#e8f5e9' : '#fff8e1',
+                color: remaining === 0 ? '#2e7d32' : '#e65100',
+              }}
+            />
+          )}
 
           <Box sx={{ flexGrow: 1 }} />
 
@@ -639,6 +676,33 @@ export default function TreatmentListPage() {
                               {t.patient_name}
                             </Typography>
                             <Typography sx={{ fontSize: '0.65rem', color: '#666' }}>{t.patient_no}</Typography>
+                            {t.patient_comment && (
+                              <Box
+                                sx={{
+                                  mt: 0.4,
+                                  px: 0.6,
+                                  py: 0.4,
+                                  bgcolor: '#fff8b3',
+                                  border: '1px solid #f0c419',
+                                  borderRadius: 1,
+                                  boxShadow: '1px 1px 0 rgba(0,0,0,0.12)',
+                                  maxHeight: 110,
+                                  overflowY: 'auto',
+                                }}
+                              >
+                                <Typography
+                                  sx={{
+                                    fontSize: '0.64rem',
+                                    color: '#4e342e',
+                                    lineHeight: 1.35,
+                                    whiteSpace: 'pre-wrap',
+                                    wordBreak: 'break-word',
+                                  }}
+                                >
+                                  {t.patient_comment}
+                                </Typography>
+                              </Box>
+                            )}
                           </TableCell>
                         )}
 
@@ -649,24 +713,31 @@ export default function TreatmentListPage() {
                             <Typography sx={{ fontSize: '0.875rem', fontWeight: 'bold', color: '#000' }}>
                               {t.regimen_name}
                             </Typography>
+                            {!!t.has_start_criteria_warning && (
+                              <Box
+                                sx={{
+                                  mt: 0.35,
+                                  px: 0.55,
+                                  py: 0.35,
+                                  bgcolor: '#ffebee',
+                                  border: '1px solid #ef9a9a',
+                                  borderRadius: 0.8,
+                                }}
+                              >
+                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.4 }}>
+                                  <Warning sx={{ fontSize: 11, color: '#c62828' }} />
+                                  <Typography sx={{ fontSize: '0.62rem', fontWeight: 'bold', color: '#b71c1c', lineHeight: 1.2 }}>
+                                    開始基準抵触の可能性！
+                                  </Typography>
+                                </Box>
+                                {(t.start_criteria_alerts ?? []).slice(0, 2).map((a, idx) => (
+                                  <Typography key={`${a.metric_key}-${idx}`} sx={{ fontSize: '0.58rem', color: '#7f0000', lineHeight: 1.2 }}>
+                                    {metricLabel(a.metric_key)} {a.current_value ?? '-'} ({a.comparator}{a.threshold_value}{a.threshold_unit ?? ''})
+                                  </Typography>
+                                ))}
+                              </Box>
+                            )}
                             <PrescChips value={t.prescription_type} />
-                            {/* 注射/内服切替チップ */}
-                            <Chip
-                              className="no-print"
-                              label={t.treatment_category ?? '注射'}
-                              size="small"
-                              onClick={() => handleCategoryToggle(t.id, t.treatment_category ?? '注射')}
-                              sx={{
-                                mt: 0.3,
-                                height: 16,
-                                fontSize: '0.6rem',
-                                cursor: 'pointer',
-                                bgcolor: (t.treatment_category ?? '注射') === '内服' ? '#f3e5f5' : '#e8f5e9',
-                                color:   (t.treatment_category ?? '注射') === '内服' ? '#6a1b9a' : '#1b5e20',
-                                border: `1px solid ${(t.treatment_category ?? '注射') === '内服' ? '#ab47bc' : '#43a047'}`,
-                                '& .MuiChip-label': { px: 0.75 },
-                              }}
-                            />
                             {t.status !== 'pending' && (
                               <Box sx={{ mt: 0.5, display: 'flex', flexDirection: 'row', flexWrap: 'wrap', gap: 0.5, alignItems: 'center' }}>
                                 <Typography sx={{ fontSize: '0.75rem', fontWeight: 'bold', color: STATUS_COLOR[t.status], lineHeight: 1.4 }}>

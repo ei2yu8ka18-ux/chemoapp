@@ -1,0 +1,29 @@
+{
+  "version": "1.0",
+  "generatedAt": "2026-03-11T14:53:40.589Z",
+  "records": [
+    {
+      "regimenName": "Erlotinib＋RAM",
+      "department": null,
+      "sourceTitle": "Erlotinib＋RAM | エルロチニブ+ラムシルマブ | レジメン | 適正使用ガイド | HOKUTO",
+      "sourceFile": "C:\\Dev\\chemoapp\\tmp\\hokuto-page.html",
+      "markdownContent": "# Erlotinib＋RAM",
+      "decisionSupport": {
+        "criteria": [],
+        "doseLevels": [],
+        "toxicityActions": []
+      },
+      "meta": {
+        "extractor": "html",
+        "sourcePath": "C:\\Dev\\chemoapp\\tmp\\hokuto-page.html",
+        "tableCount": 0,
+        "nextDataStringCount": 588,
+        "counts": {
+          "criteria": 0,
+          "doseLevels": 0,
+          "toxicityActions": 0
+        }
+      }
+    }
+  ]
+}

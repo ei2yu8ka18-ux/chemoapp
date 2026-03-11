@@ -2,7 +2,8 @@
   "name": "chemo-app",
   "private": true,
   "scripts": {
-    "dev": "concurrently -n SERVER,CLIENT -c blue,green \"npm run dev --prefix server\" \"npm run dev --prefix client\""
+    "dev": "concurrently -n SERVER,CLIENT -c blue,green \"npm run dev --prefix server\" \"npm run dev --prefix client\"",
+    "capture:hokuto": "node tools/capture-hokuto-page.mjs"
   },
   "devDependencies": {
     "concurrently": "^9.1.2"

@@ -3,13 +3,13 @@ import React from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import {
   Drawer, List, ListItemButton, ListItemIcon, ListItemText,
-  Typography, Box, Divider, Tooltip, IconButton,
+  Typography, Box, Divider, Tooltip, IconButton, Collapse,
 } from '@mui/material';
 import {
   CalendarToday, Assignment, MenuBook, Book,
   History, BarChart, TrendingUp, ManageAccounts, LibraryBooks,
   Summarize, Lock, TableChart, Settings, Login, MedicalServices,
-  ChevronLeft, ChevronRight, DateRange,
+  ChevronLeft, ChevronRight, DateRange, ExpandMore, ExpandLess,
 } from '@mui/icons-material';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -20,10 +20,9 @@ export { DRAWER_WIDTH };
 
 const NAV_ITEMS: { label: string; path: string; icon: React.ReactElement; disabled?: boolean }[] = [
   { label: '当日患者一覧',   path: '/',                     icon: <CalendarToday fontSize="small" /> },
-  { label: 'レジメン監査未', path: '/regimen',               icon: <Assignment fontSize="small" /> },
-  { label: 'レジメン監査全', path: '/regimen-all',           icon: <Assignment fontSize="small" /> },
-  { label: 'レジメンカレンダー', path: '/regimen-calendar',  icon: <DateRange fontSize="small" /> },
+  { label: 'カレンダー', path: '/regimen-calendar',  icon: <DateRange fontSize="small" /> },
   { label: '点滴説明書',      path: '/guidance',              icon: <MenuBook fontSize="small" /> },
+  { label: '\u304A\u85AC\u624B\u5E33\u767A\u884C', path: '/handbook', icon: <MenuBook fontSize="small" /> },
   { label: '業務日誌作成',   path: '/diary',                 icon: <Book fontSize="small" /> },
   { label: '業務日誌一覧',   path: '/diary-list',            icon: <LibraryBooks fontSize="small" /> },
   { label: '実施一覧',       path: '/snapshot-list',         icon: <TableChart fontSize="small" /> },
@@ -47,6 +46,10 @@ export default function Sidebar() {
 
   const [collapsed, setCollapsed] = useState(() =>
     localStorage.getItem('sidebar-collapsed') === 'true'
+  );
+  const regimenPaths = ['/regimen', '/regimen-all'];
+  const [regimenOpen, setRegimenOpen] = useState(() =>
+    regimenPaths.includes(pathname)
   );
 
   const toggle = () => {
@@ -158,7 +161,75 @@ export default function Sidebar() {
 
       {/* メインメニュー */}
       <List dense sx={{ pt: 1, flexGrow: 1 }}>
-        {NAV_ITEMS.map(renderNavItem)}
+        {NAV_ITEMS.slice(0, 1).map(renderNavItem)}
+
+        {/* レジメン監査（サブメニュー） */}
+        <Tooltip title={collapsed ? 'レジメン監査' : ''} placement="right" arrow>
+          <span>
+            <ListItemButton
+              sx={itemSx(regimenPaths.includes(pathname) && collapsed)}
+              onClick={() => {
+                if (collapsed) {
+                  navigate('/regimen');
+                } else {
+                  setRegimenOpen(v => !v);
+                }
+              }}
+            >
+              <ListItemIcon sx={{ minWidth: collapsed ? 0 : 28, color: regimenPaths.includes(pathname) ? '#fff' : '#aed6f1', justifyContent: 'center' }}>
+                <Assignment fontSize="small" />
+              </ListItemIcon>
+              {!collapsed && (
+                <>
+                  <ListItemText
+                    primary="レジメン監査"
+                    primaryTypographyProps={{
+                      fontSize: '0.78rem',
+                      color: regimenPaths.includes(pathname) ? '#fff' : '#aed6f1',
+                      fontWeight: regimenPaths.includes(pathname) ? 'bold' : 'normal',
+                    }}
+                  />
+                  {regimenOpen
+                    ? <ExpandLess sx={{ fontSize: 16, color: '#aed6f1' }} />
+                    : <ExpandMore sx={{ fontSize: 16, color: '#aed6f1' }} />}
+                </>
+              )}
+            </ListItemButton>
+          </span>
+        </Tooltip>
+        {!collapsed && (
+          <Collapse in={regimenOpen} timeout="auto" unmountOnExit>
+            <List dense disablePadding>
+              {[
+                { label: '監査未', path: '/regimen' },
+                { label: '全一覧', path: '/regimen-all' },
+              ].map(sub => {
+                const active = pathname === sub.path;
+                return (
+                  <Tooltip key={sub.path} title="" placement="right">
+                    <span>
+                      <ListItemButton
+                        sx={{ ...itemSx(active), pl: 4 }}
+                        onClick={() => navigate(sub.path)}
+                      >
+                        <ListItemText
+                          primary={sub.label}
+                          primaryTypographyProps={{
+                            fontSize: '0.75rem',
+                            color: active ? '#fff' : '#aed6f1',
+                            fontWeight: active ? 'bold' : 'normal',
+                          }}
+                        />
+                      </ListItemButton>
+                    </span>
+                  </Tooltip>
+                );
+              })}
+            </List>
+          </Collapse>
+        )}
+
+        {NAV_ITEMS.slice(1).map(renderNavItem)}
       </List>
 
       {/* パスワード変更 */}

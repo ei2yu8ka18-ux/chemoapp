@@ -18,6 +18,7 @@ import PasswordChangePage from './pages/PasswordChangePage';
 import PreConsultSettingsPage from './pages/PreConsultSettingsPage';
 import DailySnapshotListPage from './pages/DailySnapshotListPage';
 import AuthLogsPage from './pages/AuthLogsPage';
+import HandbookPage from './pages/HandbookPage';
 import Sidebar from './components/Sidebar';
 
 
@@ -68,6 +69,9 @@ function AppRoutes() {
       } />
       <Route path="/guidance" element={
         <PrivateRoute><AppLayout><GuidancePage /></AppLayout></PrivateRoute>
+      } />
+      <Route path="/handbook" element={
+        <PrivateRoute><AppLayout><HandbookPage /></AppLayout></PrivateRoute>
       } />
       <Route path="/diary" element={
         <PrivateRoute><AppLayout><DiaryPage /></AppLayout></PrivateRoute>

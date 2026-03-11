@@ -1,0 +1,118 @@
+{
+  "version": "1.0",
+  "generatedAt": "2026-03-11T15:00:59.061Z",
+  "records": [
+    {
+      "regimenName": "Erlotinib＋RAM",
+      "department": "呼吸器内科",
+      "sourceTitle": "Erlotinib＋RAM | エルロチニブ+ラムシルマブ | レジメン | 適正使用ガイド | HOKUTO",
+      "sourceFile": "C:\\Dev\\chemoapp\\tmp\\hokuto-fetched\\page.html",
+      "markdownContent": "# Erlotinib＋RAM",
+      "decisionSupport": {
+        "criteria": [],
+        "doseLevels": [
+          {
+            "drug_name": "エルロチニブ",
+            "level_index": 0,
+            "level_label": "通常量",
+            "dose_text": "150mg/日 / コース 1~ / 投与日 Day 1~14",
+            "dose_unit": null,
+            "per_basis": null,
+            "is_discontinue": false,
+            "section_type": "protocol",
+            "source_section": "regimen.medicines"
+          },
+          {
+            "drug_name": "ラムシルマブ",
+            "level_index": 0,
+            "level_label": "通常量",
+            "dose_text": "10mg/kg / コース 1~ / 投与日 Day 1",
+            "dose_unit": null,
+            "per_basis": null,
+            "is_discontinue": false,
+            "section_type": "protocol",
+            "source_section": "regimen.medicines"
+          }
+        ],
+        "toxicityActions": []
+      },
+      "meta": {
+        "extractor": "html",
+        "sourcePath": "C:\\Dev\\chemoapp\\tmp\\hokuto-fetched\\page.html",
+        "tableCount": 0,
+        "regimenJsonTableCount": 4,
+        "nextDataStringCount": 588,
+        "imageSourceCount": 8,
+        "imageSources": [
+          {
+            "url": "https://firebasestorage.googleapis.com/v0/b/hokutoapp-jp.appspot.com/o/regimens%2FQe9X2zNRHUrBc42gdxsw%2F52ffcbb3-be42-4da5-a4c3-466fe8e93328.jpg?alt=media&token=1094320f-4333-4e37-91ad-0d3cf59b6844",
+            "section": "scheduleImages"
+          },
+          {
+            "url": "https://firebasestorage.googleapis.com/v0/b/hokutoapp-jp.appspot.com/o/regimens%2FQe9X2zNRHUrBc42gdxsw%2Fabstracts%2Fe032b9f8-74df-450c-bc8a-d0a93417fe24.png?alt=media&token=d828a046-6778-45b2-8cba-dbf7af7b2461",
+            "section": "抗VEGFR-2抗体 *日本イーライリリーの外部サイトへ遷移"
+          },
+          {
+            "url": "https://firebasestorage.googleapis.com/v0/b/hokutoapp-jp.appspot.com/o/regimens%2FQe9X2zNRHUrBc42gdxsw%2Fabstracts%2F731e8dd7-d778-4a23-9eca-7e0c1ac5d112.jpg?alt=media&token=366dfafc-775a-44fe-bd17-8bbd404bd4fb",
+            "section": "サイラムザ®︎適正使用ガイドを基に編集部作図"
+          },
+          {
+            "url": "https://firebasestorage.googleapis.com/v0/b/hokutoapp-jp.appspot.com/o/regimens%2FQe9X2zNRHUrBc42gdxsw%2Fabstracts%2F0b95ba3a-d440-4e0e-a5e0-7cb47d357403.jpg?alt=media&token=727430a9-36b1-403e-aaa5-fe2c82b89f6b",
+            "section": "Lancet Oncol. 2019 Dec;20(12):1655-1669. より作図"
+          },
+          {
+            "url": "https://firebasestorage.googleapis.com/v0/b/hokutoapp-jp.appspot.com/o/regimens%2FQe9X2zNRHUrBc42gdxsw%2Fabstracts%2Fb8bdfa19-f29e-4363-b263-eb1a6aa9cfd0.jpg?alt=media&token=e2ac2874-87c6-438c-a668-4cc938b8498a",
+            "section": "Lancet Oncol. 2019 Dec;20(12):1655-1669. より作図"
+          },
+          {
+            "url": "https://firebasestorage.googleapis.com/v0/b/hokutoapp-jp.appspot.com/o/regimens%2FQe9X2zNRHUrBc42gdxsw%2Fabstracts%2F25e39892-cc0d-464f-90c9-bb2f7d1c9a33.jpg?alt=media&token=50c84392-4b66-436e-acc2-cf6ff792e022",
+            "section": "サイラムザ®︎適正使用ガイドを基に編集部作図"
+          },
+          {
+            "url": "https://firebasestorage.googleapis.com/v0/b/hokutoapp-jp.appspot.com/o/regimens%2FQe9X2zNRHUrBc42gdxsw%2Fabstracts%2F6d5b76c8-9477-4a60-9db6-413a0106e8ad.png?alt=media&token=6d917a64-69ce-4715-b12b-940cef1ef121",
+            "section": "サイラムザ®︎適正使用ガイドを基に編集部作図"
+          },
+          {
+            "url": "https://firebasestorage.googleapis.com/v0/b/hokutoapp-jp.appspot.com/o/regimens%2F1ippI5Vc9wMGi8D0Y4O1%2Fabstracts%2F022d2075-1479-4d31-a084-26537ae48676.png?alt=media&token=5ec6fdbe-a5d1-4c2c-9689-643bc897486a",
+            "section": "EGFR遺伝子変異陽性でPS 0-1の1次治療の選択肢のひとつとして､ 前版に引き続き､ 弱く推奨されている [2A]｡ その他の推奨は以下のとおり｡"
+          }
+        ],
+        "counts": {
+          "criteria": 0,
+          "doseLevels": 2,
+          "toxicityActions": 0
+        }
+      }
+    },
+    {
+      "regimenName": "Erlotinib＋RAM",
+      "department": "呼吸器内科",
+      "sourceTitle": "Erlotinib＋RAM OCR抽出",
+      "sourceFile": "C:\\Dev\\chemoapp\\tmp\\hokuto-fetched\\images\\regimens%2F1ippI5Vc9wMGi8D0Y4O1%2Fabstracts%2F022d2075-1479-4d31-a084-26537ae48676.png",
+      "markdownContent": "# Erlotinib＋RAM\n\nOCR source images: 1",
+      "decisionSupport": {
+        "criteria": [],
+        "doseLevels": [],
+        "toxicityActions": []
+      },
+      "meta": {
+        "extractor": "ocr",
+        "sourceImages": [
+          "C:\\Dev\\chemoapp\\tmp\\hokuto-fetched\\images\\regimens%2F1ippI5Vc9wMGi8D0Y4O1%2Fabstracts%2F022d2075-1479-4d31-a084-26537ae48676.png"
+        ],
+        "preprocessing": {
+          "enabled": true,
+          "threshold": 170,
+          "contrast": 0.45,
+          "scale": 1.6,
+          "psm": 6
+        },
+        "counts": {
+          "criteria": 0,
+          "doseLevels": 0,
+          "toxicityActions": 0
+        }
+      }
+    }
+  ]
+}

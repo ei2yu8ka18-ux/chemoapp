@@ -16,6 +16,15 @@ export interface BloodResults {
   upcr?: number | null;
 }
 
+export interface StartCriteriaAlertItem {
+  metric_key: string;
+  comparator: string;
+  threshold_value: number;
+  threshold_unit: string | null;
+  current_value: number | null;
+  criterion_text: string;
+}
+
 export type TreatmentStatus = 'pending' | 'done' | 'changed' | 'cancelled';
 export type PrescriptionType = '緊急' | '院内' | '院外' | null;
 
@@ -32,11 +41,15 @@ export interface Treatment extends BloodResults {
   prescription_info: string | null;    // 処方詳細（EMR連携後に設定）
   patient_no: string;
   patient_name: string;
+  patient_comment?: string | null;
   furigana: string | null;             // ふりがな
   department: string;
   doctor: string;
   diagnosis: string;
   regimen_name: string;
+  has_start_criteria_warning?: boolean;
+  start_criteria_warning_count?: number;
+  start_criteria_alerts?: StartCriteriaAlertItem[];
   pre_consultation_this_month: number; // 当月の診察前面談算定回数
   treatment_category: '注射' | '内服';  // 注射/内服区分（デフォルト: 注射）
 }

@@ -1,0 +1,30 @@
+{
+  "name": "hokuto-extractor-app",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Offline extractor for HOKUTO regimen pages (HTML embedded JSON + OCR) to chemoapp decision-support package",
+  "bin": {
+    "hokuto-extractor": "src/cli.mjs"
+  },
+  "scripts": {
+    "start": "node src/cli.mjs --help",
+    "fetch": "node src/cli.mjs fetch",
+    "extract:html": "node src/cli.mjs extract-html",
+    "extract:ocr": "node src/cli.mjs extract-ocr",
+    "merge": "node src/cli.mjs merge",
+    "push": "node src/cli.mjs push",
+    "batch": "node src/cli.mjs batch"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "cheerio": "^1.1.2",
+    "chemo-app": "file:../..",
+    "commander": "^14.0.1",
+    "glob": "^11.0.3",
+    "jimp": "^1.6.0",
+    "tesseract.js": "^6.0.1"
+  }
+}
