@@ -1,0 +1,10 @@
+{
+  "dataset_name": "Urgent Prescription Sync",
+  "description": "Daily prescription type/info for treatment sync",
+  "query_template": "SELECT\n  p.patient_no AS patient_no,\n  o.prescription_type AS prescription_type,\n  o.prescription_info AS prescription_info\nFROM vw_chemo_prescription_orders o\nJOIN vw_patient_master p ON p.patient_id = o.patient_id\nWHERE o.order_date = ?",
+  "required_params": [
+    "date"
+  ],
+  "is_enabled": true,
+  "sort_order": 20
+}

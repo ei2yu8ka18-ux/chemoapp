@@ -19,6 +19,7 @@ import PreConsultSettingsPage from './pages/PreConsultSettingsPage';
 import DailySnapshotListPage from './pages/DailySnapshotListPage';
 import AuthLogsPage from './pages/AuthLogsPage';
 import HandbookPage from './pages/HandbookPage';
+import DwhConfigPage from './pages/DwhConfigPage';
 import Sidebar from './components/Sidebar';
 
 
@@ -108,6 +109,9 @@ function AppRoutes() {
       } />
       <Route path="/admin/regimen-master" element={
         <AdminRoute><AppLayout><RegimenMasterPage /></AppLayout></AdminRoute>
+      } />
+      <Route path="/admin/dwh-config" element={
+        <AdminRoute><AppLayout><DwhConfigPage /></AppLayout></AdminRoute>
       } />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

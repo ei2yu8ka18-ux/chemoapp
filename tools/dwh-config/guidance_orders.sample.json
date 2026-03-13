@@ -1,0 +1,10 @@
+{
+  "dataset_name": "Guidance Orders",
+  "description": "Order rows for guidance page",
+  "query_template": "SELECT\n  o.patient_id AS patient_id,\n  o.order_no AS order_no,\n  o.order_date AS order_date,\n  o.patient_name AS patient_name,\n  o.patient_no AS patient_no,\n  o.drug_code_sc AS drug_code_sc,\n  o.drug_code AS drug_code,\n  o.drug_name AS drug_name,\n  o.note1 AS note1,\n  o.note2 AS note2,\n  o.inject_time AS inject_time\nFROM vw_chemo_guidance_orders o\nWHERE o.order_date = ?\nORDER BY o.patient_id, o.order_no",
+  "required_params": [
+    "date_yyyymmdd"
+  ],
+  "is_enabled": true,
+  "sort_order": 30
+}

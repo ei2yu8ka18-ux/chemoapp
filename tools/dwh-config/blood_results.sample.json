@@ -1,0 +1,10 @@
+{
+  "dataset_name": "Blood Results Sync",
+  "description": "Daily blood results for treatment sync",
+  "query_template": "SELECT\n  p.patient_no AS patient_no,\n  l.wbc AS wbc,\n  l.hgb AS hgb,\n  l.plt AS plt,\n  l.anc AS anc,\n  l.mono AS mono,\n  l.cre AS cre,\n  l.egfr AS egfr,\n  l.ast AS ast,\n  l.alt AS alt,\n  l.tbil AS tbil,\n  l.crp AS crp,\n  l.ca AS ca,\n  l.mg AS mg,\n  l.up AS up,\n  l.upcr AS upcr\nFROM vw_chemo_lab_results l\nJOIN vw_patient_master p ON p.patient_id = l.patient_id\nWHERE l.lab_date = ?",
+  "required_params": [
+    "date"
+  ],
+  "is_enabled": true,
+  "sort_order": 10
+}

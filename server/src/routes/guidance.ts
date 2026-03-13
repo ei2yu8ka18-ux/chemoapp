@@ -1,63 +1,76 @@
 import { Router, Response } from 'express';
 import { authenticateToken, AuthRequest } from '../middleware/auth';
 import { getMockOrders } from './guidance-mock';
+import { dwhQuery } from '../db/dwh';
+import {
+  DWH_DATASET_DEFINITIONS,
+  initDwhConfigStore,
+  resolveDwhDatasetQuery,
+} from '../db/dwh-config';
 
 const router = Router();
 router.use(authenticateToken);
 
-// ─── 型定義 ─────────────────────────────────────────────────────
+const GUIDANCE_DATASET_KEY = 'guidance_orders';
+
 export interface OrderRow {
-  patient_id:   string;
-  order_no:     string;
-  order_date:   string;   // YYYYMMDD
+  patient_id: string;
+  order_no: string;
+  order_date: string;   // YYYYMMDD
   patient_name: string;
-  patient_no:   string;   // カルテ番号（表示用）
-  drug_code_sc: string;   // 列O: SC判定用コード（I20118=皮下注射）
-  drug_code:    string;   // 列Q: 薬剤コード（画像選択・時間デフォルト）
-  drug_name:    string;   // 列R: 薬剤名
-  note1:        string;   // 列Y: 注入備考1
-  note2:        string;   // 列Z: 注入備考2
-  inject_time:  string;   // 列AD: 注入時間
+  patient_no: string;
+  drug_code_sc: string;
+  drug_code: string;
+  drug_name: string;
+  note1: string;
+  note2: string;
+  inject_time: string;
 }
 
-// ─── GET /api/guidance/orders?date=YYYY-MM-DD ────────────────────
-router.get('/orders', async (req: AuthRequest, res: Response) => {
-  const date = (req.query.date as string) || new Date().toISOString().split('T')[0];
-
-  const vendor = process.env.EMR_VENDOR ?? 'mock';
-
-  if (vendor === 'mock') {
-    return res.json(getMockOrders(date));
+function normalizeDateInput(value: unknown): string {
+  const date = String(value || '').trim();
+  if (!date) return new Date().toISOString().split('T')[0];
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    throw new Error('Invalid date format. Use YYYY-MM-DD.');
   }
+  return date;
+}
 
-  // ── DWH接続（今後実装） ──────────────────────────────────────
-  // 例: SQL Server の場合
-  //   const sql = require('mssql');
-  //   const pool = await sql.connect(process.env.DWH_CONNECTION_STRING);
-  //   const result = await pool.request()
-  //     .input('date', sql.VarChar, date.replace(/-/g, ''))
-  //     .query(`
-  //       SELECT
-  //         A  AS patient_id,
-  //         B  AS order_no,
-  //         H  AS order_date,
-  //         M  AS patient_name,
-  //         N  AS patient_no,
-  //         O  AS drug_code_sc,
-  //         Q  AS drug_code,
-  //         R  AS drug_name,
-  //         Y  AS note1,
-  //         Z  AS note2,
-  //         AD AS inject_time
-  //       FROM dbo.order_view
-  //       WHERE H = @date
-  //         AND [センター区分] = '外来化学療法'
-  //       ORDER BY A, B
-  //     `);
-  //   return res.json(result.recordset);
-  // ─────────────────────────────────────────────────────────────
+router.get('/orders', async (req: AuthRequest, res: Response) => {
+  try {
+    const date = normalizeDateInput(req.query.date as string | undefined);
+    const vendor = String(process.env.EMR_VENDOR ?? 'mock').trim().toLowerCase();
 
-  res.status(501).json({ error: 'DWH接続が設定されていません。EMR_VENDOR=mock に設定してください。' });
+    if (vendor === 'mock') {
+      res.json(getMockOrders(date));
+      return;
+    }
+
+    if (vendor === 'dwh') {
+      await initDwhConfigStore();
+      const definition = DWH_DATASET_DEFINITIONS[GUIDANCE_DATASET_KEY];
+      const resolved = await resolveDwhDatasetQuery({
+        datasetKey: GUIDANCE_DATASET_KEY,
+        fallbackQuery: definition?.queryTemplate ?? 'SELECT 1 AS ok',
+        defaultRequiredParams: definition?.requiredParams ?? [],
+        params: {
+          date,
+          date_yyyymmdd: date.replace(/-/g, ''),
+        },
+      });
+
+      const rows = await dwhQuery<OrderRow>(resolved.sql, resolved.params);
+      res.json(rows);
+      return;
+    }
+
+    res.status(400).json({
+      error: `Unsupported EMR_VENDOR: ${vendor}. Use "mock" or "dwh".`,
+    });
+  } catch (err) {
+    console.error('[guidance/orders]', err);
+    res.status(500).json({ error: String(err) });
+  }
 });
 
 export default router;
